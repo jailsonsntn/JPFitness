@@ -755,6 +755,7 @@ export default function Workouts() {
   const [logsLoading, setLogsLoading] = useState(false)
   const [cardioSaving, setCardioSaving] = useState(false)
   const [cardioExpanded, setCardioExpanded] = useState(true)
+  const [expandedPrograms, setExpandedPrograms] = useState({})
   const [cardioFeedback, setCardioFeedback] = useState(null)
   const [cardioForm, setCardioForm] = useState({
     type: 'run',
@@ -868,6 +869,22 @@ export default function Workouts() {
 
     return groups.sort((a, b) => b.weeklyCount - a.weeklyCount)
   }, [myWorkouts])
+
+  useEffect(() => {
+    if (groupedPrograms.length === 0) {
+      setExpandedPrograms({})
+      return
+    }
+
+    setExpandedPrograms(prev => {
+      const next = {}
+      groupedPrograms.forEach(program => {
+        const key = program.name.toLowerCase().trim()
+        next[key] = Object.prototype.hasOwnProperty.call(prev, key) ? prev[key] : true
+      })
+      return next
+    })
+  }, [groupedPrograms])
 
   const cardioPanel = useMemo(() => {
     const cardioLogs = workoutLogs.filter(log => {
@@ -1710,33 +1727,50 @@ export default function Workouts() {
           </div>
         ) : (
           <div className="space-y-4">
-            {groupedPrograms.map(program => (
-              <section key={program.name} className="card p-0 overflow-hidden">
-                <div className="px-3 sm:px-4 py-2.5 border-b border-jp-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
-                  <div>
-                    <h3 className="text-white font-semibold text-[19px] leading-tight break-words">{program.name}</h3>
-                    <p className="text-jp-gray text-[13px]">
-                      {program.weeklyCount}x por semana • {program.totalExercises} exercícios no total
-                    </p>
-                  </div>
-                  <span className="badge-dark text-xs w-fit">{program.type}</span>
-                </div>
+            {groupedPrograms.map(program => {
+              const programKey = program.name.toLowerCase().trim()
+              const isProgramExpanded = expandedPrograms[programKey] ?? true
 
-                <div className={`p-2.5 sm:p-3 grid auto-rows-min gap-2 ${program.workouts.length > 1 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
-                  {program.workouts.map((workout, idx) => (
-                    <WorkoutCard
-                      key={workout.id}
-                      workout={{
-                        ...workout,
-                        sessionName: workout.sessionName || `Sessão ${idx + 1}`,
-                      }}
-                      onStart={handleStartWorkout}
-                      onDelete={handleDeleteMyWorkout}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
+              return (
+                <section key={program.name} className="card p-0 overflow-hidden">
+                  <div className="px-3 sm:px-4 py-2.5 border-b border-jp-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+                    <div>
+                      <h3 className="text-white font-semibold text-[19px] leading-tight break-words">{program.name}</h3>
+                      <p className="text-jp-gray text-[13px]">
+                        {program.weeklyCount}x por semana • {program.totalExercises} exercícios no total
+                      </p>
+                    </div>
+                    <div className="inline-flex items-center gap-1.5 w-fit">
+                      <span className="badge-dark text-xs w-fit">{program.type}</span>
+                      <button
+                        onClick={() => setExpandedPrograms(prev => ({ ...prev, [programKey]: !isProgramExpanded }))}
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-jp-border text-jp-gray hover:text-white hover:border-jp-orange/40 transition-colors"
+                        aria-label={isProgramExpanded ? `Retrair ${program.type}` : `Expandir ${program.type}`}
+                        title={isProgramExpanded ? 'Retrair' : 'Expandir'}
+                      >
+                        {isProgramExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {isProgramExpanded && (
+                    <div className={`p-2.5 sm:p-3 grid auto-rows-min gap-2 ${program.workouts.length > 1 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+                      {program.workouts.map((workout, idx) => (
+                        <WorkoutCard
+                          key={workout.id}
+                          workout={{
+                            ...workout,
+                            sessionName: workout.sessionName || `Sessão ${idx + 1}`,
+                          }}
+                          onStart={handleStartWorkout}
+                          onDelete={handleDeleteMyWorkout}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )
+            })}
           </div>
         )
       )}
