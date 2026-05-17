@@ -1,6 +1,6 @@
 # JPFitness
 
-Aplicacao web fitness com foco em treinos personalizados, controle de evolucao e IA para suporte de treino e nutricao.
+Aplicacao web fitness com foco em treinos personalizados, controle de evolucao e suporte inteligente para treino.
 
 ## Visao Geral
 
@@ -9,7 +9,7 @@ O JPFitness foi construido para centralizar em um unico lugar:
 - geracao de planos com IA
 - execucao de treino com registro de series, reps e peso real (kg)
 - monitoramento de carga e evolucao por usuario
-- controle nutricional e metricas de progresso
+- controle nutricional manual e metricas de progresso
 - autenticacao e persistencia via Supabase
 
 ## Stack
@@ -20,7 +20,7 @@ O JPFitness foi construido para centralizar em um unico lugar:
 - Supabase (Auth + Postgres)
 - Recharts
 - Groq API (chat e geracao de treino)
-- Gemini API (nutricao)
+- FastAPI (motor Python local para fallback de treino/chat e analise nutricional)
 
 ## Funcionalidades Principais
 
@@ -55,7 +55,9 @@ Variaveis obrigatorias:
 - VITE_SUPABASE_URL
 - VITE_SUPABASE_ANON_KEY
 - VITE_GROQ_API_KEY
-- VITE_GEMINI_API_KEY
+
+Variaveis opcionais:
+- VITE_PYTHON_API_URL (padrao: http://localhost:8000)
 
 ## Rodando Localmente
 
@@ -101,6 +103,22 @@ Antes de usar monitoramento completo de carga/evolucao, execute as migracoes no 
 
 Essa migracao adiciona campos de carga em workout_logs e index para consultas por usuario.
 
+## Motor Python Local (Opcional e Recomendado)
+
+Para reduzir dependencia de provedores externos de IA, o projeto inclui um motor Python em [python_backend/app.py](python_backend/app.py).
+
+Funcionalidades atuais:
+- fallback de respostas de chat
+- fallback de geracao de treino semanal
+- analise nutricional com score e dicas
+
+Como rodar:
+
+1. Acesse [python_backend](python_backend)
+2. Crie e ative um ambiente virtual
+3. Instale dependencias com [python_backend/requirements.txt](python_backend/requirements.txt)
+4. Inicie: `uvicorn app:app --reload --host 0.0.0.0 --port 8000`
+
 ## Deploy na Vercel
 
 ### 1. Importar projeto
@@ -121,7 +139,6 @@ Adicione no projeto (Environment Variables):
 - VITE_SUPABASE_URL
 - VITE_SUPABASE_ANON_KEY
 - VITE_GROQ_API_KEY
-- VITE_GEMINI_API_KEY
 
 ### 4. Rotas SPA
 

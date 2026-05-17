@@ -1,5 +1,10 @@
 const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY
 const GROQ_BASE_URL = 'https://api.groq.com/openai/v1'
+import {
+  sendChatWithPython,
+  getMotivationalQuoteWithPython,
+  generateWorkoutPlanWithPython,
+} from './pythonApi'
 
 const SYSTEM_PROMPT = `Você é o JPFitness AI, um treinador pessoal e nutricionista profissional de elite. 
 Você fornece conselhos de fitness personalizados, planos de treino, orientação nutricional e motivação.
@@ -10,6 +15,10 @@ Use emojis ocasionalmente para tornar a conversa mais dinâmica.
 Sempre termine com uma dica motivacional ou de segurança quando relevante.`
 
 export async function sendChatMessage(messages) {
+  if (!GROQ_API_KEY) {
+    return sendChatWithPython(messages)
+  }
+
   const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -29,8 +38,7 @@ export async function sendChatMessage(messages) {
   })
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({}))
-    throw new Error(err.error?.message || 'Groq API error')
+    return sendChatWithPython(messages)
   }
 
   const data = await response.json()
@@ -38,6 +46,10 @@ export async function sendChatMessage(messages) {
 }
 
 export async function getMotivationalQuote() {
+  if (!GROQ_API_KEY) {
+    return getMotivationalQuoteWithPython()
+  }
+
   const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -57,12 +69,16 @@ export async function getMotivationalQuote() {
     })
   })
 
-  if (!response.ok) return 'Cada rep te aproxima do seu melhor eu. 💪'
+  if (!response.ok) return getMotivationalQuoteWithPython()
   const data = await response.json()
   return data.choices[0].message.content
 }
 
 export async function generateWorkoutPlan({ level, goal, days, equipment }) {
+  if (!GROQ_API_KEY) {
+    return generateWorkoutPlanWithPython({ level, goal, days, equipment })
+  }
+
   const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -89,7 +105,9 @@ Formate com dias, exercícios, séries e repetições. Use markdown.`
     })
   })
 
-  if (!response.ok) throw new Error('Falha ao gerar plano de treino')
+  if (!response.ok) {
+    return generateWorkoutPlanWithPython({ level, goal, days, equipment })
+  }
   const data = await response.json()
   return data.choices[0].message.content
 }
