@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import {
-  Apple, Plus, Trash2, Search, Zap, ChevronDown, ChevronUp,
+  Apple, Trash2, Search, Zap, ChevronDown, ChevronUp,
   Calendar, Target, TrendingUp, Info, X, Loader, Save, Copy, Check, BookMarked
 } from 'lucide-react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { analyzeMeal, generateMealPlan, getNutritionTip } from '../services/geminiApi'
+import { searchFoods, calculateNutritionFromFood } from '../services/foodDataApi'
 import { useAuth } from '../context/AuthContext'
 import {
   getFoodLogs,
@@ -243,9 +244,24 @@ function PlanViewerModal({ plan, onClose }) {
 export default function Nutrition() {
   const { user, profile } = useAuth()
   const [selectedGoal, setSelectedGoal] = useState(GOALS[0])
+  const [entryMode, setEntryMode] = useState('ai')
   const [foodInput, setFoodInput] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [analysisResult, setAnalysisResult] = useState(null)
+  const [manualForm, setManualForm] = useState({
+    name: '',
+    quantityG: '100',
+    calories: '',
+    protein: '',
+    carbs: '',
+    fat: '',
+    fiber: '',
+  })
+  const [manualSaving, setManualSaving] = useState(false)
+  const [fdcQuery, setFdcQuery] = useState('')
+  const [fdcResults, setFdcResults] = useState([])
+  const [fdcLoading, setFdcLoading] = useState(false)
+  const [selectedFdcFood, setSelectedFdcFood] = useState(null)
   const [foodLog, setFoodLog] = useState([])
   const [mealPlan, setMealPlan] = useState('')
   const [viewingPlan, setViewingPlan] = useState(null)
@@ -318,6 +334,84 @@ export default function Nutrition() {
       alert('Erro ao analisar refeição. Tente novamente.')
     } finally {
       setAnalyzing(false)
+    }
+  }
+
+  const handleSearchFoods = async () => {
+    if (!fdcQuery.trim() || fdcLoading) return
+    setFdcLoading(true)
+    try {
+      const foods = await searchFoods(fdcQuery.trim(), 8)
+      setFdcResults(foods)
+    } catch {
+      alert('Erro ao buscar alimentos. Verifique a chave do FoodData Central.')
+    } finally {
+      setFdcLoading(false)
+    }
+  }
+
+  const handleSelectFood = (food) => {
+    setSelectedFdcFood(food)
+    setManualForm(prev => ({
+      ...prev,
+      name: food.description || prev.name,
+    }))
+  }
+
+  const handleApplyFoodValues = () => {
+    if (!selectedFdcFood) return
+    const qty = parseFloat(manualForm.quantityG) || 100
+    const nutrition = calculateNutritionFromFood(selectedFdcFood, qty)
+    setManualForm(prev => ({
+      ...prev,
+      calories: String(nutrition.calories),
+      protein: String(nutrition.protein),
+      carbs: String(nutrition.carbs),
+      fat: String(nutrition.fat),
+      fiber: String(nutrition.fiber),
+    }))
+  }
+
+  const handleAddManualMeal = async () => {
+    if (!manualForm.name.trim() || manualSaving) return
+
+    const quantity = Math.max(1, parseFloat(manualForm.quantityG) || 100)
+    const payload = {
+      user_id: user?.id,
+      meal_name: manualForm.name.trim(),
+      description: `Registro manual (${quantity}g)`,
+      calories: Math.max(0, Math.round(parseFloat(manualForm.calories) || 0)),
+      protein_g: Math.max(0, parseFloat(manualForm.protein) || 0),
+      carbs_g: Math.max(0, parseFloat(manualForm.carbs) || 0),
+      fat_g: Math.max(0, parseFloat(manualForm.fat) || 0),
+      fiber_g: Math.max(0, parseFloat(manualForm.fiber) || 0),
+    }
+
+    setManualSaving(true)
+    try {
+      if (user) {
+        const saved = await createFoodLog(payload)
+        setFoodLog(prev => [...prev, saved])
+      } else {
+        setFoodLog(prev => [...prev, { ...payload, id: Date.now() }])
+      }
+
+      setManualForm({
+        name: '',
+        quantityG: '100',
+        calories: '',
+        protein: '',
+        carbs: '',
+        fat: '',
+        fiber: '',
+      })
+      setSelectedFdcFood(null)
+      setFdcResults([])
+      setFdcQuery('')
+    } catch {
+      alert('Erro ao salvar refeição manual.')
+    } finally {
+      setManualSaving(false)
     }
   }
 
@@ -455,30 +549,175 @@ export default function Nutrition() {
               <Apple size={20} className="text-jp-orange" />
               Registrar Refeição
             </h2>
-            <p className="text-jp-gray text-sm mb-3">
-              Descreva sua refeição e a IA analisará as informações nutricionais.
-            </p>
-            <div className="flex gap-3">
-              <input
-                type="text"
-                placeholder="Ex: 200g frango grelhado com arroz integral e brócolis..."
-                value={foodInput}
-                onChange={e => setFoodInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAnalyzeMeal()}
-                className="input-dark flex-1"
-                disabled={analyzing}
-              />
+            <div className="flex gap-2 mb-3">
               <button
-                onClick={handleAnalyzeMeal}
-                disabled={!foodInput.trim() || analyzing}
-                className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                onClick={() => setEntryMode('ai')}
+                className={entryMode === 'ai' ? 'tab-btn-active' : 'tab-btn-inactive'}
               >
-                {analyzing ? <LoadingSpinner size="sm" /> : <><Zap size={16} /> Analisar</>}
+                Usar IA
+              </button>
+              <button
+                onClick={() => setEntryMode('manual')}
+                className={entryMode === 'manual' ? 'tab-btn-active' : 'tab-btn-inactive'}
+              >
+                Manual + API
               </button>
             </div>
-            <p className="text-xs text-jp-gray mt-2">
-              💡 Seja específico (porções, métodos de preparo) para resultados mais precisos
-            </p>
+
+            {entryMode === 'ai' ? (
+              <>
+                <p className="text-jp-gray text-sm mb-3">
+                  Descreva sua refeição e a IA analisará as informações nutricionais.
+                </p>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    placeholder="Ex: 200g frango grelhado com arroz integral e brócolis..."
+                    value={foodInput}
+                    onChange={e => setFoodInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleAnalyzeMeal()}
+                    className="input-dark flex-1"
+                    disabled={analyzing}
+                  />
+                  <button
+                    onClick={handleAnalyzeMeal}
+                    disabled={!foodInput.trim() || analyzing}
+                    className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                  >
+                    {analyzing ? <LoadingSpinner size="sm" /> : <><Zap size={16} /> Analisar</>}
+                  </button>
+                </div>
+                <p className="text-xs text-jp-gray mt-2">
+                  Seja específico (porções e preparo) para resultados mais precisos.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-jp-gray text-sm mb-3">
+                  Busque um alimento na FoodData Central, informe a quantidade em gramas e salve os valores.
+                </p>
+
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={fdcQuery}
+                    onChange={e => setFdcQuery(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleSearchFoods()}
+                    placeholder="Buscar alimento (ex: arroz cozido, banana)"
+                    className="input-dark flex-1"
+                    disabled={fdcLoading}
+                  />
+                  <button
+                    onClick={handleSearchFoods}
+                    disabled={!fdcQuery.trim() || fdcLoading}
+                    className="btn-secondary disabled:opacity-40"
+                  >
+                    {fdcLoading ? <LoadingSpinner size="sm" /> : <><Search size={15} /> Buscar</>}
+                  </button>
+                </div>
+
+                {fdcResults.length > 0 && (
+                  <div className="max-h-40 overflow-y-auto border border-jp-border rounded-xl p-2 mb-3 space-y-1 bg-jp-card-light">
+                    {fdcResults.map(food => (
+                      <button
+                        key={food.fdcId}
+                        onClick={() => handleSelectFood(food)}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                          selectedFdcFood?.fdcId === food.fdcId
+                            ? 'bg-jp-orange/20 text-white border border-jp-orange/40'
+                            : 'text-jp-gray-light hover:bg-jp-border'
+                        }`}
+                      >
+                        <p className="font-medium text-white truncate">{food.description}</p>
+                        <p className="text-xs text-jp-gray truncate">{food.brandOwner || food.dataType || 'FoodData Central'}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <input
+                    type="text"
+                    value={manualForm.name}
+                    onChange={e => setManualForm(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Nome do alimento"
+                    className="input-dark"
+                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      value={manualForm.quantityG}
+                      onChange={e => setManualForm(prev => ({ ...prev, quantityG: e.target.value }))}
+                      placeholder="Quantidade (g)"
+                      className="input-dark"
+                    />
+                    <button
+                      onClick={handleApplyFoodValues}
+                      disabled={!selectedFdcFood}
+                      className="btn-secondary disabled:opacity-40 whitespace-nowrap"
+                    >
+                      Usar API
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
+                  <input
+                    type="number"
+                    min="0"
+                    value={manualForm.calories}
+                    onChange={e => setManualForm(prev => ({ ...prev, calories: e.target.value }))}
+                    placeholder="kcal"
+                    className="input-dark"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={manualForm.protein}
+                    onChange={e => setManualForm(prev => ({ ...prev, protein: e.target.value }))}
+                    placeholder="Prot (g)"
+                    className="input-dark"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={manualForm.carbs}
+                    onChange={e => setManualForm(prev => ({ ...prev, carbs: e.target.value }))}
+                    placeholder="Carb (g)"
+                    className="input-dark"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={manualForm.fat}
+                    onChange={e => setManualForm(prev => ({ ...prev, fat: e.target.value }))}
+                    placeholder="Gord (g)"
+                    className="input-dark"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={manualForm.fiber}
+                    onChange={e => setManualForm(prev => ({ ...prev, fiber: e.target.value }))}
+                    placeholder="Fibra (g)"
+                    className="input-dark"
+                  />
+                </div>
+
+                <button
+                  onClick={handleAddManualMeal}
+                  disabled={!manualForm.name.trim() || manualSaving}
+                  className="btn-primary w-full justify-center disabled:opacity-40"
+                >
+                  {manualSaving ? <LoadingSpinner size="sm" /> : 'Adicionar refeição manual'}
+                </button>
+              </>
+            )}
           </div>
 
           {/* Log list */}
