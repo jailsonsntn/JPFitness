@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jpfitness-v2';
+const CACHE_NAME = 'jpfitness-v3';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/logo/logo1.svg'];
 
 self.addEventListener('install', (event) => {
@@ -46,11 +46,12 @@ self.addEventListener('fetch', (event) => {
 
       return fetch(event.request)
         .then((response) => {
+          if (!response || response.status !== 200) return response;
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
           return response;
         })
-        .catch(() => caches.match('/index.html'));
+        .catch(() => caches.match(event.request));
     })
   );
 });
