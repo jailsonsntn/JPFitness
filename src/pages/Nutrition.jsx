@@ -166,6 +166,16 @@ function parsePlanSections(text) {
 }
 
 function PlanSectionView({ title, lines }) {
+  const renderBoldText = (text) => {
+    const parts = String(text || '').split(/(\*\*[^*]+\*\*)/g)
+    return parts.map((part, index) => {
+      if (/^\*\*[^*]+\*\*$/.test(part)) {
+        return <strong key={index} className="text-white font-semibold">{part.slice(2, -2)}</strong>
+      }
+      return <span key={index}>{part}</span>
+    })
+  }
+
   return (
     <div className="rounded-xl border border-jp-border bg-jp-card-light p-4">
       {title && <h4 className="text-white font-bold mb-2">{title}</h4>}
@@ -175,7 +185,7 @@ function PlanSectionView({ title, lines }) {
             return (
               <p key={idx} className="text-sm text-jp-gray-light flex gap-2">
                 <span className="text-jp-orange">•</span>
-                <span>{line.replace(/^[-*]\s+/, '')}</span>
+                <span>{renderBoldText(line.replace(/^[-*]\s+/, ''))}</span>
               </p>
             )
           }
@@ -185,12 +195,12 @@ function PlanSectionView({ title, lines }) {
             return (
               <p key={idx} className="text-sm text-jp-gray-light flex gap-2">
                 <span className="text-jp-orange font-semibold">{numbered[1]}.</span>
-                <span>{numbered[2]}</span>
+                <span>{renderBoldText(numbered[2])}</span>
               </p>
             )
           }
 
-          return <p key={idx} className="text-sm text-jp-gray-light">{line}</p>
+          return <p key={idx} className="text-sm text-jp-gray-light">{renderBoldText(line)}</p>
         })}
       </div>
     </div>
