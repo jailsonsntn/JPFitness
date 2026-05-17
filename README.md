@@ -9,7 +9,7 @@ O JPFitness foi construido para centralizar em um unico lugar:
 - geracao de planos com IA
 - execucao de treino com registro de series, reps e peso real (kg)
 - monitoramento de carga e evolucao por usuario
-- controle nutricional manual e metricas de progresso
+- controle de progresso por metricas de treino
 - autenticacao e persistencia via Supabase
 
 ## Stack
@@ -20,7 +20,7 @@ O JPFitness foi construido para centralizar em um unico lugar:
 - Supabase (Auth + Postgres)
 - Recharts
 - Groq API (chat e geracao de treino)
-- FastAPI (motor Python local para fallback de treino/chat e analise nutricional)
+- FastAPI (motor Python local para fallback de treino/chat)
 
 ## Funcionalidades Principais
 
@@ -110,7 +110,6 @@ Para reduzir dependencia de provedores externos de IA, o projeto inclui um motor
 Funcionalidades atuais:
 - fallback de respostas de chat
 - fallback de geracao de treino semanal
-- analise nutricional com score e dicas
 
 Como rodar:
 

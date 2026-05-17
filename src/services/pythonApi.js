@@ -43,10 +43,3 @@ export async function generateWorkoutPlanWithPython(payload) {
   })
   return data.plan
 }
-
-export async function analyzeNutritionWithPython(payload) {
-  return request('/api/nutrition/analyze', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  })
-}

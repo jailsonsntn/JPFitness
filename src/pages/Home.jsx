@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import {
-  Zap, Bot, BookOpen, Apple, ArrowRight, Play, Star,
+  Zap, Bot, BookOpen, ArrowRight, Play, Star,
   Users, Dumbbell, TrendingUp, ChevronRight, Shield, Clock
 } from 'lucide-react'
 
@@ -32,13 +32,13 @@ const features = [
     badge: '500+ exercícios'
   },
   {
-    icon: Apple,
-    title: 'Nutrição Inteligente',
-    description: 'Analise refeições com IA, acompanhe macros e receba planos alimentares personalizados para o seu objetivo.',
+    icon: TrendingUp,
+    title: 'Evolução de Carga',
+    description: 'Acompanhe seu progresso por sessão, volume total e recordes de carga em cada exercício.',
     color: 'text-green-400',
     bg: 'bg-green-400/10',
-    link: '/nutrition',
-    badge: 'Tecnologia de IA'
+    link: '/dashboard',
+    badge: 'Monitoramento real'
   },
 ]
 
@@ -51,18 +51,18 @@ const steps = [
   {
     number: '02',
     title: 'Receba seu Plano',
-    description: 'Nossa IA cria um plano de treino e dieta completamente personalizado para você em segundos.'
+    description: 'Nossa IA cria um plano de treino personalizado para você em segundos.'
   },
   {
     number: '03',
     title: 'Acompanhe Progresso',
-    description: 'Registre treinos, refeições e monitore sua evolução com gráficos detalhados.'
+    description: 'Registre treinos e monitore sua evolução com gráficos detalhados.'
   },
 ]
 
 const testimonials = [
   { name: 'Rafael M.', role: 'Ganhou 8kg de massa', text: 'O Treinador IA me deu um plano que nenhum personal conseguiu antes. Resultados em 3 meses!', rating: 5 },
-  { name: 'Ana P.', role: 'Perdeu 15kg', text: 'A função de análise de refeições mudou minha relação com a comida. Incrível!', rating: 5 },
+  { name: 'Ana P.', role: 'Perdeu 15kg', text: 'A organização dos treinos e a consistência diária mudaram meus resultados. Incrível!', rating: 5 },
   { name: 'Lucas S.', role: 'Corredor amador', text: 'A biblioteca de exercícios é absurdamente completa. Vale muito!', rating: 5 },
 ]
 
@@ -129,7 +129,7 @@ export default function Home() {
           </h1>
 
           <p className="text-jp-gray text-lg sm:text-xl max-w-2xl mx-auto mb-10 leading-relaxed">
-            Treinos personalizados por IA, acompanhamento nutricional inteligente e acesso a mais de 500 exercícios.
+            Treinos personalizados por IA, evolução de carga e acesso a mais de 500 exercícios.
             Tudo em um só lugar.
           </p>
 
@@ -161,7 +161,7 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto opacity-60">
               {[
                 { title: 'Treino de Hoje', sub: 'Peito + Tríceps • 6 exercícios', icon: Dumbbell },
-                { title: 'Meta Calórica', sub: '2.450 / 2.800 kcal consumidas', icon: Apple },
+                { title: 'Carga Máxima', sub: 'Supino reto • 85kg na sessão', icon: TrendingUp },
                 { title: 'Sequência', sub: '🔥 12 dias consecutivos!', icon: TrendingUp },
               ].map(({ title, sub, icon: Icon }) => (
                 <div key={title} className="card text-left">

@@ -8,7 +8,6 @@ API local em FastAPI para reduzir dependencia de IA externa.
 - POST /api/chat/reply
 - GET /api/motivation/quote
 - POST /api/workouts/generate
-- POST /api/nutrition/analyze
 
 ## Rodar localmente
 

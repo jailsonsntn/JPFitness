@@ -241,48 +241,6 @@ export async function getWeeklyWorkoutStats(userId) {
   return result
 }
 
-// ─── FOOD LOGS ────────────────────────────────────────────────
-
-export async function getFoodLogs(userId, date = null) {
-  const targetDate = date || new Date().toISOString().split('T')[0]
-  const { data, error } = await supabase
-    .from('food_logs')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('logged_date', targetDate)
-    .order('created_at', { ascending: true })
-  if (error) throw error
-  return data || []
-}
-
-export async function createFoodLog(log) {
-  const { data, error } = await supabase
-    .from('food_logs')
-    .insert(log)
-    .select()
-    .single()
-  if (error) throw error
-  return data
-}
-
-export async function deleteFoodLog(id) {
-  const { error } = await supabase.from('food_logs').delete().eq('id', id)
-  if (error) throw error
-}
-
-export async function getNutritionHistory(userId, days = 7) {
-  const since = new Date()
-  since.setDate(since.getDate() - days)
-  const { data, error } = await supabase
-    .from('daily_nutrition_summary')
-    .select('*')
-    .eq('user_id', userId)
-    .gte('logged_date', since.toISOString().split('T')[0])
-    .order('logged_date', { ascending: true })
-  if (error) throw error
-  return data || []
-}
-
 // ─── BODY MEASUREMENTS ────────────────────────────────────────
 
 export async function getMeasurements(userId, limit = 20) {

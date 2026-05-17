@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Dumbbell, Flame, TrendingUp, Calendar, Bot, Apple,
+  Dumbbell, Flame, TrendingUp, Calendar, Bot,
   BookOpen, ChevronRight, Zap, Target, Clock, Award, User
 } from 'lucide-react'
 import {
@@ -12,7 +12,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import { getMotivationalQuote } from '../services/groqApi'
 import { useAuth } from '../context/AuthContext'
 import {
-  getWeeklyWorkoutStats, getWorkoutLogs, getFoodLogs, getNutritionHistory, parseWorkoutLogMeta
+  getWeeklyWorkoutStats, getWorkoutLogs, parseWorkoutLogMeta
 } from '../services/dbService'
 
 function getWeightStatsFromLog(log) {
@@ -46,27 +46,7 @@ const quickLinks = [
   { to: '/exercises', label: 'Ver Exercícios', icon: BookOpen, color: 'text-blue-400 bg-blue-400/10' },
   { to: '/workouts', label: 'Meus Treinos', icon: Dumbbell, color: 'text-jp-orange bg-jp-orange/10' },
   { to: '/ai-trainer', label: 'Treinador IA', icon: Bot, color: 'text-purple-400 bg-purple-400/10' },
-  { to: '/nutrition', label: 'Nutrição', icon: Apple, color: 'text-green-400 bg-green-400/10' },
 ]
-
-function ProgressRing({ value, max, color, size = 80, strokeWidth = 8 }) {
-  const radius = (size - strokeWidth) / 2
-  const circumference = radius * 2 * Math.PI
-  const offset = circumference - (Math.min(value / max, 1)) * circumference
-
-  return (
-    <svg width={size} height={size} className="rotate-[-90deg]">
-      <circle cx={size / 2} cy={size / 2} r={radius} stroke="#2A2A2A" strokeWidth={strokeWidth} fill="none" />
-      <circle
-        cx={size / 2} cy={size / 2} r={radius}
-        stroke={color} strokeWidth={strokeWidth} fill="none"
-        strokeDasharray={circumference} strokeDashoffset={offset}
-        strokeLinecap="round"
-        style={{ transition: 'stroke-dashoffset 1s ease' }}
-      />
-    </svg>
-  )
-}
 
 export default function Dashboard() {
   const { user, profile, streak } = useAuth()
@@ -76,15 +56,7 @@ export default function Dashboard() {
   const [recentLogs, setRecentLogs] = useState([])
   const [loadHistory, setLoadHistory] = useState([])
   const [exerciseRecords, setExerciseRecords] = useState([])
-  const [todayFood, setTodayFood] = useState([])
   const [dataLoading, setDataLoading] = useState(true)
-
-  const calorieGoal = profile?.daily_calorie_goal || 2000
-  const todayCalories = todayFood.reduce((s, f) => s + (f.calories || 0), 0)
-  const todayProtein = todayFood.reduce((s, f) => s + (parseFloat(f.protein_g) || 0), 0)
-  const todayCarbs = todayFood.reduce((s, f) => s + (parseFloat(f.carbs_g) || 0), 0)
-  const todayFat = todayFood.reduce((s, f) => s + (parseFloat(f.fat_g) || 0), 0)
-  const caloriePct = Math.round((todayCalories / calorieGoal) * 100)
 
   const weekWorkouts = weekData.reduce((s, d) => s + d.workouts, 0)
   const weekMinutes = weekData.reduce((s, d) => s + d.minutes, 0)
@@ -109,9 +81,8 @@ export default function Dashboard() {
     Promise.all([
       getWeeklyWorkoutStats(user.id),
       getWorkoutLogs(user.id, 30),
-      getFoodLogs(user.id),
     ])
-      .then(([week, logs, food]) => {
+      .then(([week, logs]) => {
         setWeekData(week)
         setRecentLogs((logs || []).slice(0, 3))
         const history = (logs || [])
@@ -155,19 +126,12 @@ export default function Dashboard() {
             .sort((a, b) => b.maxWeight - a.maxWeight)
             .slice(0, 5)
         )
-        setTodayFood(food)
       })
       .catch(console.error)
       .finally(() => setDataLoading(false))
   }, [user])
 
   const firstName = profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'Atleta'
-
-  const macros = [
-    { label: 'Proteína', value: Math.round(todayProtein), goal: Math.round(calorieGoal * 0.3 / 4), color: '#3B82F6', unit: 'g' },
-    { label: 'Carbs', value: Math.round(todayCarbs), goal: Math.round(calorieGoal * 0.45 / 4), color: '#F59E0B', unit: 'g' },
-    { label: 'Gordura', value: Math.round(todayFat), goal: Math.round(calorieGoal * 0.25 / 9), color: '#10B981', unit: 'g' },
-  ]
 
   return (
     <div className="page-container pt-24">
@@ -216,7 +180,7 @@ export default function Dashboard() {
         {[
           { label: 'Treinos esta semana', value: dataLoading ? '—' : String(weekWorkouts), icon: Dumbbell, color: 'text-jp-orange', bg: 'bg-jp-orange/10', change: 'semana atual' },
           { label: 'Sequência atual', value: dataLoading ? '—' : `${streak?.current_streak || 0} dias`, icon: Flame, color: 'text-red-400', bg: 'bg-red-400/10', change: streak?.current_streak >= (streak?.longest_streak || 0) ? '🔥 Recorde pessoal!' : `Melhor: ${streak?.longest_streak || 0} dias` },
-          { label: 'Kcal hoje', value: dataLoading ? '—' : String(todayCalories), icon: Target, color: 'text-green-400', bg: 'bg-green-400/10', change: `Meta: ${calorieGoal} kcal` },
+          { label: 'Carga máxima média', value: dataLoading ? '—' : `${avgMaxWeight.toFixed(1)} kg`, icon: Target, color: 'text-green-400', bg: 'bg-green-400/10', change: 'média em 30 dias' },
           { label: 'Minutos ativos', value: dataLoading ? '—' : String(weekMinutes), icon: Clock, color: 'text-blue-400', bg: 'bg-blue-400/10', change: 'esta semana' },
         ].map(({ label, value, icon: Icon, color, bg, change }) => (
           <div key={label} className="card">
@@ -231,9 +195,9 @@ export default function Dashboard() {
       </div>
 
       {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 gap-6 mb-8">
         {/* Weekly activity */}
-        <div className="card lg:col-span-2">
+        <div className="card">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-bold text-white">Atividade Semanal</h2>
             <span className="badge-dark">Treinos / dia</span>
@@ -260,26 +224,6 @@ export default function Dashboard() {
               </AreaChart>
             </ResponsiveContainer>
           )}
-        </div>
-
-        {/* Calorie ring */}
-        <div className="card flex flex-col items-center justify-center">
-          <h2 className="text-lg font-bold text-white mb-4">Meta Calórica</h2>
-          <div className="relative">
-            <ProgressRing value={todayCalories} max={calorieGoal} color="#FF6200" size={120} strokeWidth={10} />
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-2xl font-black text-white">{caloriePct}%</span>
-              <span className="text-jp-gray text-xs">atingido</span>
-            </div>
-          </div>
-          <div className="mt-4 text-center">
-            <p className="text-white font-bold">{todayCalories} <span className="text-jp-gray font-normal">/ {calorieGoal} kcal</span></p>
-            <p className="text-jp-orange text-sm mt-1">
-              {calorieGoal - todayCalories > 0
-                ? `Restam ${calorieGoal - todayCalories} kcal`
-                : `+${todayCalories - calorieGoal} kcal acima da meta`}
-            </p>
-          </div>
         </div>
       </div>
 
@@ -354,40 +298,9 @@ export default function Dashboard() {
       </div>
 
       {/* Bottom row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Macros */}
-        <div className="card">
-          <h2 className="text-lg font-bold text-white mb-4">Macros de Hoje</h2>
-          {todayFood.length === 0 && !dataLoading ? (
-            <div className="text-center py-4">
-              <p className="text-jp-gray text-sm">Nenhuma refeição registrada hoje</p>
-              <Link to="/nutrition" className="text-jp-orange text-sm font-semibold mt-2 inline-block hover:underline">
-                Registrar refeição →
-              </Link>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {macros.map(({ label, value, goal, color, unit }) => {
-                const pct = Math.min(Math.round((value / goal) * 100), 100)
-                return (
-                  <div key={label}>
-                    <div className="flex justify-between text-sm mb-1.5">
-                      <span className="text-jp-gray-light font-medium">{label}</span>
-                      <span className="text-white font-semibold">{value}/{goal}{unit}</span>
-                    </div>
-                    <div className="h-2 bg-jp-border rounded-full overflow-hidden">
-                      <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${pct}%`, background: color }} />
-                    </div>
-                    <p className="text-xs mt-1 font-medium" style={{ color }}>{pct}% da meta</p>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
+      <div className="grid grid-cols-1 gap-6">
         {/* Recent workouts */}
-        <div className="card lg:col-span-2">
+        <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-white">Treinos Recentes</h2>
             <Link to="/workouts" className="text-jp-orange text-sm font-medium hover:underline flex items-center gap-1">

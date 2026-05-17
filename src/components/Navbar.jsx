@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
-  Dumbbell, LayoutDashboard, BookOpen, Bot, Apple, Menu, X,
+  Dumbbell, LayoutDashboard, BookOpen, Bot, Menu, X,
   User, LogOut, Settings, ChevronDown, Download
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -12,7 +12,6 @@ const navLinks = [
   { to: '/exercises', label: 'Exercícios', icon: BookOpen },
   { to: '/workouts', label: 'Treinos', icon: Dumbbell },
   { to: '/ai-trainer', label: 'Treinador IA', icon: Bot },
-  { to: '/nutrition', label: 'Nutrição', icon: Apple },
 ]
 
 function UserMenu({ user, profile, onSignOut }) {

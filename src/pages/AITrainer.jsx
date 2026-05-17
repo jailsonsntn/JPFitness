@@ -10,13 +10,13 @@ import { getChatMessages, saveChatMessage, clearChatMessages } from '../services
 
 const SUGGESTED_PROMPTS = [
   { icon: '💪', text: 'Crie um plano de treino para iniciante de 3 dias por semana' },
-  { icon: '🍎', text: 'O que devo comer antes e depois do treino?' },
+  { icon: '🧠', text: 'Como montar uma rotina semanal de treino sem overtraining?' },
   { icon: '🏋️', text: 'Como fazer o agachamento corretamente?' },
   { icon: '⚡', text: 'Quais exercícios são melhores para perder gordura abdominal?' },
   { icon: '💤', text: 'Qual a importância do descanso no processo de ganho de massa?' },
-  { icon: '🥩', text: 'Quanta proteína devo consumir por dia para ganhar músculo?' },
+  { icon: '📈', text: 'Como progredir carga de forma segura no supino e no agachamento?' },
   { icon: '🔥', text: 'Me monte um treino HIIT para fazer em casa sem equipamento' },
-  { icon: '📊', text: 'Como calcular minha necessidade calórica diária?' },
+  { icon: '📊', text: 'Como estruturar deload sem perder desempenho?' },
 ]
 
 function formatMessage(text) {
@@ -108,7 +108,7 @@ export default function AITrainer() {
   const { user } = useAuth()
   const INITIAL_MSG = {
     role: 'assistant',
-    content: 'Olá! Sou o **JPFitness AI**, seu treinador pessoal virtual! 💪\n\nPosso te ajudar com:\n- Planos de treino personalizados\n- Dicas de nutrição e dieta\n- Técnica e execução de exercícios\n- Motivação e estratégias de progresso\n\nComo posso te ajudar hoje?',
+    content: 'Olá! Sou o **JPFitness AI**, seu treinador pessoal virtual! 💪\n\nPosso te ajudar com:\n- Planos de treino personalizados\n- Técnica e execução de exercícios\n- Motivação e estratégias de progresso\n- Organização da rotina de treino\n\nComo posso te ajudar hoje?',
     time: 'Agora'
   }
   const [messages, setMessages] = useState([INITIAL_MSG])
@@ -287,7 +287,7 @@ export default function AITrainer() {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Pergunte qualquer coisa sobre treino ou nutrição..."
+                placeholder="Pergunte qualquer coisa sobre treino..."
                 rows={1}
                 disabled={loading}
                 className="input-dark resize-none py-3 pr-4 leading-relaxed max-h-32 overflow-y-auto"

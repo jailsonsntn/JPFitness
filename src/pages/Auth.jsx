@@ -66,12 +66,12 @@ export default function Auth() {
             Sua jornada fitness começa aqui
           </h2>
           <p className="text-jp-gray text-lg leading-relaxed mb-10">
-            Treinos com IA, acompanhamento nutricional e mais de 500 exercícios. Tudo em um só lugar.
+            Treinos com IA, monitoramento de evolução e mais de 500 exercícios. Tudo em um só lugar.
           </p>
           <div className="grid grid-cols-1 gap-4 text-left">
             {[
               { icon: '🤖', title: 'AI Trainer 24/7', sub: 'Tire dúvidas e receba planos personalizados com IA' },
-              { icon: '🍎', title: 'Nutrição Inteligente', sub: 'Analise refeições e gere dietas com IA' },
+              { icon: '🏋️', title: 'Treino Inteligente', sub: 'Gere treinos e ajuste sua rotina com base no seu objetivo' },
               { icon: '📊', title: 'Progresso Real', sub: 'Acompanhe evolução com gráficos e métricas detalhadas' },
             ].map(({ icon, title, sub }) => (
               <div key={title} className="flex gap-4 p-4 bg-jp-card/60 rounded-xl border border-jp-border/50">

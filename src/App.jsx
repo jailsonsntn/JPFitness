@@ -8,7 +8,6 @@ import Dashboard from './pages/Dashboard'
 import Exercises from './pages/Exercises'
 import Workouts from './pages/Workouts'
 import AITrainer from './pages/AITrainer'
-import Nutrition from './pages/Nutrition'
 import Profile from './pages/Profile'
 
 export default function App() {
@@ -25,7 +24,6 @@ export default function App() {
               <Route path="/exercises" element={<ProtectedRoute><Exercises /></ProtectedRoute>} />
               <Route path="/workouts" element={<ProtectedRoute><Workouts /></ProtectedRoute>} />
               <Route path="/ai-trainer" element={<ProtectedRoute><AITrainer /></ProtectedRoute>} />
-              <Route path="/nutrition" element={<ProtectedRoute><Nutrition /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
