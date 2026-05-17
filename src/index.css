@@ -41,17 +41,16 @@
 
 @layer components {
   .btn-primary {
-    @apply bg-jp-orange hover:bg-jp-orange-dark text-white font-semibold px-6 py-3 rounded-xl transition-all duration-200 inline-flex items-center gap-2 cursor-pointer;
-    box-shadow: 0 4px 15px rgba(255, 98, 0, 0.3);
+    @apply bg-jp-orange hover:bg-jp-orange-dark text-white font-medium px-5 py-3 rounded-xl transition-all duration-200 inline-flex items-center gap-2 cursor-pointer;
+    box-shadow: 0 2px 10px rgba(255, 98, 0, 0.22);
   }
 
   .btn-primary:hover {
-    box-shadow: 0 6px 25px rgba(255, 98, 0, 0.5);
-    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(255, 98, 0, 0.3);
   }
 
   .btn-secondary {
-    @apply border border-jp-orange text-jp-orange hover:bg-jp-orange hover:text-white font-semibold px-6 py-3 rounded-xl transition-all duration-200 inline-flex items-center gap-2 cursor-pointer;
+    @apply border border-jp-orange/70 text-jp-orange hover:bg-jp-orange/10 hover:border-jp-orange text-sm font-medium px-5 py-3 rounded-xl transition-all duration-200 inline-flex items-center gap-2 cursor-pointer;
   }
 
   .btn-ghost {
@@ -59,13 +58,13 @@
   }
 
   .card {
-    @apply bg-jp-card border border-jp-border rounded-2xl p-6 transition-all duration-300;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+    @apply bg-jp-card border border-jp-border rounded-2xl p-4 sm:p-5 transition-all duration-300;
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.42);
   }
 
   .card:hover {
-    border-color: rgba(255, 98, 0, 0.3);
-    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.8);
+    border-color: rgba(255, 98, 0, 0.2);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
   }
 
   .card-glow {
@@ -82,7 +81,7 @@
   }
 
   .badge {
-    @apply text-xs font-semibold px-2 py-1 rounded-full;
+    @apply text-xs font-medium px-2 py-0.5 rounded-full;
   }
 
   .badge-orange {
@@ -113,16 +112,42 @@
   }
 
   .tab-btn {
-    @apply px-4 py-2 rounded-xl font-medium text-sm transition-all duration-200 cursor-pointer;
+    @apply px-4 py-2 rounded-xl font-medium text-sm transition-all duration-200 cursor-pointer border border-jp-border leading-tight;
   }
 
   .tab-btn-active {
-    @apply tab-btn bg-jp-orange text-white;
-    box-shadow: 0 4px 12px rgba(255, 98, 0, 0.3);
+    @apply tab-btn bg-jp-orange/15 text-jp-orange border-jp-orange/60;
+    box-shadow: none;
   }
 
   .tab-btn-inactive {
-    @apply tab-btn text-jp-gray hover:text-white bg-jp-card border border-jp-border hover:border-jp-orange;
+    @apply tab-btn text-jp-gray hover:text-white bg-jp-card hover:border-jp-orange/50;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-container {
+    @apply px-3 py-6;
+  }
+
+  .card {
+    @apply p-3.5;
+    border-radius: 16px;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    @apply px-4 py-2 text-sm;
+  }
+
+  .input-dark {
+    @apply px-3 py-2.5;
+  }
+
+  .tab-btn,
+  .tab-btn-active,
+  .tab-btn-inactive {
+    @apply px-3 py-2 text-sm;
   }
 }
 

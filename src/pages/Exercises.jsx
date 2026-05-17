@@ -252,7 +252,7 @@ function ExerciseCard({ exercise, onClick, translatedName }) {
   return (
     <div
       onClick={() => onClick(exercise)}
-      className="card cursor-pointer group hover:border-jp-orange/50 hover:translate-y-[-2px]"
+      className="card cursor-pointer group hover:border-jp-orange/40"
     >
       {/* Category badge */}
       <div className="flex items-center justify-between mb-3">
@@ -263,7 +263,7 @@ function ExerciseCard({ exercise, onClick, translatedName }) {
       </div>
 
       {/* Exercise name */}
-      <h3 className="text-white font-bold text-base leading-tight mb-3 line-clamp-2 group-hover:text-jp-orange transition-colors">
+      <h3 className="text-white font-semibold text-base leading-tight mb-3 line-clamp-2 group-hover:text-jp-orange transition-colors">
         {name}
       </h3>
 
@@ -386,7 +386,7 @@ export default function Exercises() {
 
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-black text-white mb-2">Biblioteca de Exercícios</h1>
+        <h1 className="text-2xl sm:text-3xl font-semibold text-white mb-2">Biblioteca de Exercícios</h1>
         <p className="text-jp-gray">Explore mais de 500 exercícios com instruções detalhadas</p>
       </div>
 
@@ -474,7 +474,7 @@ export default function Exercises() {
 
       {/* Pagination */}
       {!search && totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 mt-10">
+        <div className="flex items-center justify-center gap-2 mt-10 flex-wrap">
           <button
             onClick={() => setPage(p => Math.max(0, p - 1))}
             disabled={page === 0}
@@ -492,7 +492,7 @@ export default function Exercises() {
                   onClick={() => setPage(pageNum)}
                   className={`w-9 h-9 rounded-lg text-sm font-medium transition-all ${
                     pageNum === page
-                      ? 'bg-jp-orange text-white'
+                      ? 'bg-jp-orange/15 text-jp-orange border border-jp-orange/50'
                       : 'bg-jp-card text-jp-gray hover:text-white hover:bg-jp-border'
                   }`}
                 >

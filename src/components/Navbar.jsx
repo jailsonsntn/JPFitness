@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   Dumbbell, LayoutDashboard, BookOpen, Bot, Menu, X,
-  User, LogOut, Settings, ChevronDown, Download
+  User, LogOut, Settings, ChevronDown
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { signOut } from '../services/dbService'
@@ -43,8 +43,8 @@ function UserMenu({ user, profile, onSignOut }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-52 bg-jp-card border border-jp-border rounded-xl shadow-card-hover overflow-hidden z-50">
-          <div className="px-4 py-3 border-b border-jp-border">
+        <div className="absolute right-0 top-full mt-2 w-48 sm:w-52 bg-jp-card border border-jp-border rounded-xl shadow-card-hover overflow-hidden z-50">
+          <div className="px-3 sm:px-4 py-3 border-b border-jp-border">
             <p className="text-white font-semibold text-sm truncate">{profile?.full_name || 'Usuário'}</p>
             <p className="text-jp-gray text-xs truncate">{user?.email}</p>
           </div>
@@ -73,11 +73,11 @@ function UserMenu({ user, profile, onSignOut }) {
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
-  const [installPrompt, setInstallPrompt] = useState(null)
   const location = useLocation()
   const navigate = useNavigate()
   const { user, profile, isAuthenticated } = useAuth()
   const isHome = location.pathname === '/'
+  const logoTarget = isAuthenticated ? '/dashboard' : '/'
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20)
@@ -89,38 +89,9 @@ export default function Navbar() {
     setIsOpen(false)
   }, [location])
 
-  useEffect(() => {
-    const handleBeforeInstallPrompt = (event) => {
-      event.preventDefault()
-      setInstallPrompt(event)
-    }
-
-    const handleAppInstalled = () => {
-      setInstallPrompt(null)
-    }
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
-    window.addEventListener('appinstalled', handleAppInstalled)
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
-      window.removeEventListener('appinstalled', handleAppInstalled)
-    }
-  }, [])
-
   const handleSignOut = async () => {
     await signOut().catch(() => {})
     navigate('/')
-  }
-
-  const handleInstall = async () => {
-    if (!installPrompt) return
-    installPrompt.prompt()
-    try {
-      await installPrompt.userChoice
-    } finally {
-      setInstallPrompt(null)
-    }
   }
 
   const navBg = scrolled || !isHome
@@ -132,11 +103,11 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <NavLink to="/" className="flex items-center gap-2 group">
+          <NavLink to={logoTarget} className="flex items-center gap-2 group">
             <img
               src="/logo/logo1.svg"
               alt="JPFitness"
-              className="w-9 h-9 object-contain drop-shadow-[0_0_10px_rgba(255,98,0,0.35)]"
+              className="w-8 h-8 object-contain drop-shadow-[0_0_8px_rgba(255,98,0,0.25)]"
             />
             <img
               src="/logo/logo2.svg"
@@ -155,7 +126,7 @@ export default function Navbar() {
                   className={({ isActive }) =>
                     `flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
                       isActive
-                        ? 'bg-jp-orange text-white shadow-orange'
+                        ? 'bg-jp-orange/15 text-jp-orange border border-jp-orange/50'
                         : 'text-jp-gray hover:text-white hover:bg-jp-card'
                     }`
                   }
@@ -169,15 +140,6 @@ export default function Navbar() {
 
           {/* Right side */}
           <div className="flex items-center gap-3">
-            {isAuthenticated && installPrompt && (
-              <button
-                onClick={handleInstall}
-                className="hidden sm:flex items-center gap-2 text-sm bg-jp-card border border-jp-border hover:border-jp-orange/50 rounded-xl px-3 py-2 text-jp-gray-light hover:text-white transition-colors"
-              >
-                <Download size={14} />
-                Instalar app
-              </button>
-            )}
             {isAuthenticated ? (
               <UserMenu user={user} profile={profile} onSignOut={handleSignOut} />
             ) : (
@@ -201,15 +163,6 @@ export default function Navbar() {
       {isOpen && isAuthenticated && (
         <div className="md:hidden border-t border-jp-border bg-jp-dark/98 backdrop-blur-md">
           <div className="px-4 py-3 space-y-1">
-            {installPrompt && (
-              <button
-                onClick={handleInstall}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-jp-gray hover:text-white hover:bg-jp-card"
-              >
-                <Download size={18} />
-                Instalar app
-              </button>
-            )}
             {navLinks.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
@@ -217,7 +170,7 @@ export default function Navbar() {
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                     isActive
-                      ? 'bg-jp-orange text-white'
+                      ? 'bg-jp-orange/15 text-jp-orange border border-jp-orange/40'
                       : 'text-jp-gray hover:text-white hover:bg-jp-card'
                   }`
                 }
