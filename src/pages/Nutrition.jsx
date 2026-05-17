@@ -133,7 +133,7 @@ function MealAnalysisModal({ result, onClose }) {
 function parsePlanSections(text) {
   const lines = String(text || '').replace(/\r/g, '').split('\n')
   const sections = []
-  let current = { title: 'Resumo', lines: [] }
+  let current = { title: '', lines: [] }
 
   for (const rawLine of lines) {
     const line = rawLine.trim()
@@ -142,7 +142,12 @@ function parsePlanSections(text) {
 
     const headingMatch = line.match(/^#{1,3}\s*(.+)$/)
     if (headingMatch) {
-      if (current.lines.length > 0 || current.title) sections.push(current)
+      if (current.lines.length > 0) {
+        sections.push({
+          title: current.title || 'Resumo',
+          lines: current.lines,
+        })
+      }
       current = { title: headingMatch[1], lines: [] }
       continue
     }
@@ -150,7 +155,13 @@ function parsePlanSections(text) {
     current.lines.push(line)
   }
 
-  if (current.title || current.lines.length > 0) sections.push(current)
+  if (current.title || current.lines.length > 0) {
+    sections.push({
+      title: current.title || 'Resumo',
+      lines: current.lines,
+    })
+  }
+
   return sections.filter(s => s.title || s.lines.length)
 }
 
@@ -186,6 +197,39 @@ function PlanSectionView({ title, lines }) {
   )
 }
 
+function PlanViewerModal({ plan, onClose }) {
+  if (!plan) return null
+
+  const sections = parsePlanSections(plan.content)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-jp-card border border-jp-border rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-jp-card border-b border-jp-border px-6 py-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-white">{plan.title}</h2>
+            {plan.created_at && (
+              <p className="text-xs text-jp-gray mt-0.5">
+                {new Date(plan.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+              </p>
+            )}
+          </div>
+          <button onClick={onClose} className="text-jp-gray hover:text-white p-1">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-3">
+          {sections.map((section, idx) => (
+            <PlanSectionView key={`${section.title}-${idx}`} title={section.title} lines={section.lines} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Nutrition() {
   const { user, profile } = useAuth()
   const [selectedGoal, setSelectedGoal] = useState(GOALS[0])
@@ -194,10 +238,10 @@ export default function Nutrition() {
   const [analysisResult, setAnalysisResult] = useState(null)
   const [foodLog, setFoodLog] = useState([])
   const [mealPlan, setMealPlan] = useState('')
+  const [viewingPlan, setViewingPlan] = useState(null)
   const [planLoading, setPlanLoading] = useState(false)
   const [savingPlan, setSavingPlan] = useState(false)
   const [savedPlans, setSavedPlans] = useState([])
-  const [expandedSavedPlanId, setExpandedSavedPlanId] = useState(null)
   const [copiedSavedPlanId, setCopiedSavedPlanId] = useState(null)
   const [tip, setTip] = useState('')
   const [tipLoading, setTipLoading] = useState(true)
@@ -319,7 +363,7 @@ export default function Nutrition() {
       await deleteAIResponse(id).catch(console.error)
     }
     setSavedPlans(prev => prev.filter(item => item.id !== id))
-    if (expandedSavedPlanId === id) setExpandedSavedPlanId(null)
+    if (viewingPlan?.id === id) setViewingPlan(null)
   }
 
   const copySavedPlan = async (plan) => {
@@ -342,11 +386,14 @@ export default function Nutrition() {
       {analysisResult && (
         <MealAnalysisModal result={analysisResult} onClose={() => setAnalysisResult(null)} />
       )}
+      {viewingPlan && (
+        <PlanViewerModal plan={viewingPlan} onClose={() => setViewingPlan(null)} />
+      )}
 
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-black text-white mb-2">Nutrição Inteligente</h1>
-        <p className="text-jp-gray">Acompanhe suas refeições e receba análises com IA Gemini</p>
+        <p className="text-jp-gray">Acompanhe suas refeições e receba análises com IA</p>
       </div>
 
       {/* Goal selector */}
@@ -399,7 +446,7 @@ export default function Nutrition() {
               Registrar Refeição
             </h2>
             <p className="text-jp-gray text-sm mb-3">
-              Descreva sua refeição e a IA Gemini analisará as informações nutricionais.
+              Descreva sua refeição e a IA analisará as informações nutricionais.
             </p>
             <div className="flex gap-3">
               <input
@@ -533,21 +580,37 @@ export default function Nutrition() {
                     Plano Alimentar • {selectedGoal.label}
                   </p>
                   {!/^erro ao gerar plano/i.test(mealPlan.trim()) && (
-                    <button
-                      onClick={handleSaveMealPlan}
-                      disabled={savingPlan}
-                      className="text-xs px-3 py-1.5 rounded-lg border border-jp-border text-jp-gray-light hover:text-white hover:border-jp-orange/50 transition-colors disabled:opacity-40 inline-flex items-center gap-1"
-                    >
-                      <Save size={12} />
-                      {savingPlan ? 'Salvando...' : 'Salvar resposta'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setViewingPlan({ title: `Plano Alimentar • ${selectedGoal.label}`, content: mealPlan })}
+                        className="text-xs px-3 py-1.5 rounded-lg border border-jp-border text-jp-gray-light hover:text-white hover:border-jp-orange/50 transition-colors inline-flex items-center gap-1"
+                      >
+                        <Search size={12} /> Ver completo
+                      </button>
+                      <button
+                        onClick={handleSaveMealPlan}
+                        disabled={savingPlan}
+                        className="text-xs px-3 py-1.5 rounded-lg border border-jp-border text-jp-gray-light hover:text-white hover:border-jp-orange/50 transition-colors disabled:opacity-40 inline-flex items-center gap-1"
+                      >
+                        <Save size={12} />
+                        {savingPlan ? 'Salvando...' : 'Salvar resposta'}
+                      </button>
+                    </div>
                   )}
                 </div>
 
                 <div className="space-y-3">
-                  {generatedPlanSections.map((section, idx) => (
+                  {generatedPlanSections.slice(0, 2).map((section, idx) => (
                     <PlanSectionView key={`${section.title}-${idx}`} title={section.title} lines={section.lines} />
                   ))}
+                  {generatedPlanSections.length > 2 && (
+                    <button
+                      onClick={() => setViewingPlan({ title: `Plano Alimentar • ${selectedGoal.label}`, content: mealPlan })}
+                      className="w-full text-sm text-jp-orange hover:underline"
+                    >
+                      Ver plano completo ({generatedPlanSections.length} seções)
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -566,8 +629,6 @@ export default function Nutrition() {
               ) : (
                 <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                   {savedPlans.map(plan => {
-                    const isOpen = expandedSavedPlanId === plan.id
-                    const sections = parsePlanSections(plan.content)
                     return (
                       <div key={plan.id} className="border border-jp-border rounded-lg bg-jp-card p-3">
                         <div className="flex items-start justify-between gap-2">
@@ -586,11 +647,11 @@ export default function Nutrition() {
                               {copiedSavedPlanId === plan.id ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
                             </button>
                             <button
-                              onClick={() => setExpandedSavedPlanId(isOpen ? null : plan.id)}
+                              onClick={() => setViewingPlan(plan)}
                               className="p-1.5 rounded text-jp-gray hover:text-white hover:bg-jp-border"
-                              title={isOpen ? 'Recolher' : 'Abrir'}
+                              title="Abrir"
                             >
-                              {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                              <Search size={14} />
                             </button>
                             <button
                               onClick={() => handleDeleteSavedPlan(plan.id)}
@@ -601,14 +662,6 @@ export default function Nutrition() {
                             </button>
                           </div>
                         </div>
-
-                        {isOpen && (
-                          <div className="mt-3 space-y-2">
-                            {sections.map((section, idx) => (
-                              <PlanSectionView key={`${plan.id}-${idx}`} title={section.title} lines={section.lines} />
-                            ))}
-                          </div>
-                        )}
                       </div>
                     )
                   })}

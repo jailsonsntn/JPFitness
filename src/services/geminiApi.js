@@ -2,7 +2,9 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta'
 const MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-flash-latest'
 
-async function generateContent(prompt) {
+async function generateContent(prompt, options = {}) {
+  const { maxOutputTokens = 1024, temperature = 0.7 } = options
+
   if (!GEMINI_API_KEY) {
     throw new Error('VITE_GEMINI_API_KEY não configurada.')
   }
@@ -15,8 +17,8 @@ async function generateContent(prompt) {
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1024
+          temperature,
+          maxOutputTokens
         }
       })
     }
@@ -71,20 +73,43 @@ Retorne APENAS o JSON, sem texto adicional.`
 }
 
 export async function generateMealPlan({ goal, calories, restrictions }) {
-  const prompt = `Crie um plano alimentar completo para um dia em português brasileiro:
+  const prompt = `Crie um plano alimentar completo e detalhado para um dia em português brasileiro:
 - Objetivo: ${goal}
 - Meta calórica: ${calories} kcal
 - Restrições: ${restrictions || 'nenhuma'}
 
-Formate como markdown com:
-- 3 refeições principais + 2 lanches
-- Para cada refeição: nome, alimentos, porções estimadas e macros (cal, prot, carb, gord)
-- Dicas de preparação
-- Total diário de macros no final
+FORMATO OBRIGATÓRIO (markdown):
+### Resumo
+### 1. Café da manhã
+### 2. Lanche da manhã
+### 3. Almoço
+### 4. Lanche da tarde
+### 5. Jantar
+### Total diário de macros
+### Dicas práticas
 
-Seja prático e use alimentos acessíveis no Brasil.`
+Para CADA refeição, inclua obrigatoriamente:
+- lista de alimentos com porções
+- calorias aproximadas
+- proteína, carboidrato e gordura da refeição
 
-  return generateContent(prompt)
+No total diário, some macros e calorias aproximadas.
+Use alimentos comuns no Brasil e linguagem prática.
+Nao responda de forma resumida. Entregue o plano completo.
+
+Retorne apenas o plano em markdown.`
+
+  let result = await generateContent(prompt, { maxOutputTokens: 2048, temperature: 0.65 })
+
+  const isTooShort = String(result || '').length < 650
+  const hasCoreMeals = /(Caf[ée] da manh[ãa]|Almo[cç]o|Jantar)/i.test(result || '')
+
+  if (isTooShort || !hasCoreMeals) {
+    const retryPrompt = `${prompt}\n\nA resposta anterior veio curta. Reescreva completa seguindo todos os títulos obrigatórios.`
+    result = await generateContent(retryPrompt, { maxOutputTokens: 2048, temperature: 0.6 })
+  }
+
+  return result
 }
 
 export async function getNutritionTip(goal) {
