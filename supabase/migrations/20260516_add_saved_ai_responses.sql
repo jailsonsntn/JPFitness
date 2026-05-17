@@ -16,5 +16,18 @@ create index if not exists saved_ai_responses_user_idx
 
 alter table public.saved_ai_responses enable row level security;
 
-create policy "saved_ai_responses: all own"
-  on public.saved_ai_responses for all using (auth.uid() = user_id);
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'saved_ai_responses'
+      and policyname = 'saved_ai_responses: all own'
+  ) then
+    create policy "saved_ai_responses: all own"
+      on public.saved_ai_responses
+      for all
+      using (auth.uid() = user_id);
+  end if;
+end $$;
