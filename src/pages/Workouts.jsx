@@ -77,14 +77,13 @@ const TEMPLATES = [
 const LEVELS = ['Iniciante', 'Intermediário', 'Avançado']
 const GOALS_LIST = ['Ganho de massa muscular', 'Perda de gordura', 'Força máxima', 'Resistência', 'Condicionamento geral']
 const EQUIPMENT_OPTIONS = ['Academia completa', 'Halteres e barras', 'Apenas peso corporal', 'Elásticos e kettlebells']
-const WEEK_DAYS = [
-  { id: 'seg', label: 'Segunda-feira' },
-  { id: 'ter', label: 'Terça-feira' },
-  { id: 'qua', label: 'Quarta-feira' },
-  { id: 'qui', label: 'Quinta-feira' },
-  { id: 'sex', label: 'Sexta-feira' },
-  { id: 'sab', label: 'Sábado' },
-  { id: 'dom', label: 'Domingo' },
+const WEEK_SESSIONS = [
+  { id: 's1', label: 'Sessão 1' },
+  { id: 's2', label: 'Sessão 2' },
+  { id: 's3', label: 'Sessão 3' },
+  { id: 's4', label: 'Sessão 4' },
+  { id: 's5', label: 'Sessão 5' },
+  { id: 's6', label: 'Sessão 6' },
 ]
 
 const LEVEL_TO_DB = {
@@ -115,11 +114,16 @@ function createEmptyExercise() {
   }
 }
 
-function getInitialManualByDay() {
-  return WEEK_DAYS.reduce((acc, day) => {
-    acc[day.id] = [createEmptyExercise()]
+function getInitialManualBySession() {
+  return WEEK_SESSIONS.reduce((acc, session) => {
+    acc[session.id] = [createEmptyExercise()]
     return acc
   }, {})
+}
+
+function getSelectedSessions(timesPerWeek) {
+  const total = Math.max(1, Math.min(6, Number(timesPerWeek) || 1))
+  return WEEK_SESSIONS.slice(0, total).map(s => s.id)
 }
 
 function parseExerciseMeta(notes) {
@@ -203,20 +207,53 @@ function parseExerciseLine(line) {
   }
 }
 
+function generateLocalWorkoutPlanText({ goal, days }) {
+  const count = Math.max(1, Math.min(6, Number(days) || 3))
+
+  const goalLower = String(goal || '').toLowerCase()
+  const focus = goalLower.includes('gordura')
+    ? ['Cardio intervalado', 'Circuito metabólico', 'Full body']
+    : goalLower.includes('força')
+      ? ['Força membros superiores', 'Força membros inferiores', 'Core e estabilidade']
+      : ['Peito, ombros e tríceps', 'Costas e bíceps', 'Pernas e glúteos']
+
+  const banks = [
+    ['Agachamento Livre', 'Supino Reto', 'Remada Curvada', 'Desenvolvimento Militar', 'Prancha'],
+    ['Leg Press', 'Puxada Frontal', 'Afundo', 'Elevação Lateral', 'Rosca Direta'],
+    ['Stiff', 'Flexão de Braço', 'Remada Unilateral', 'Tríceps Corda', 'Abdominal Bicicleta'],
+    ['Passada Caminhando', 'Puxada na Barra', 'Supino Inclinado', 'Panturrilha em Pé', 'Prancha Lateral'],
+    ['Levantamento Terra Romeno', 'Paralela', 'Remada Baixa', 'Desenvolvimento com Halteres', 'Abdominal Infra'],
+    ['Agachamento Sumô', 'Pulldown', 'Crucifixo Inclinado', 'Tríceps Francês', 'Mountain Climbers'],
+  ]
+
+  const blocks = []
+  for (let i = 0; i < count; i += 1) {
+    const title = focus[i % focus.length]
+    const exercises = banks[i % banks.length]
+    blocks.push([
+      `Sessão ${i + 1}: ${title}`,
+      ...exercises.map(ex => `- ${ex}: 3 séries de 10-12 repetições`),
+      ''
+    ].join('\n'))
+  }
+
+  return blocks.join('\n')
+}
+
 function parseAIPlanToWorkouts({ aiPlan, aiForm, userId, planName }) {
   const lines = (aiPlan || '').split('\n').map(l => l.trim()).filter(Boolean)
-  const dayRegex = /dia\s*(\d+)\s*[:\-]\s*(.+)$/i
+  const blockRegex = /(?:dia|sess[aã]o|treino)\s*(\d+)\s*[:\-]?\s*(.*)$/i
   const blocks = []
   let current = null
 
   for (const raw of lines) {
     const line = raw.replace(/^#+\s*/, '').replace(/\*\*/g, '').trim()
-    const dayMatch = line.match(dayRegex)
+    const blockMatch = line.match(blockRegex)
 
-    if (dayMatch) {
+    if (blockMatch) {
       current = {
-        dayNumber: dayMatch[1],
-        title: dayMatch[2].trim(),
+        dayNumber: blockMatch[1],
+        title: blockMatch[2]?.trim() || `Sessão ${blockMatch[1]}`,
         exercises: [],
       }
       blocks.push(current)
@@ -237,14 +274,42 @@ function parseAIPlanToWorkouts({ aiPlan, aiForm, userId, planName }) {
     current.exercises.push(parsed)
   }
 
-  const normalized = blocks.filter(b => b.exercises.length > 0)
-  if (normalized.length === 0) return []
+  const parsedBlocks = blocks.filter(b => b.exercises.length > 0)
+  if (parsedBlocks.length === 0) return []
+
+  const targetSessions = Math.max(1, Number(aiForm.days) || 1)
+  const allExercises = parsedBlocks.flatMap(b => b.exercises)
+
+  let normalized = parsedBlocks
+
+  if (targetSessions > 1 && parsedBlocks.length !== targetSessions && allExercises.length >= targetSessions) {
+    const generated = []
+    let cursor = 0
+
+    for (let i = 0; i < targetSessions; i += 1) {
+      const remainingExercises = allExercises.length - cursor
+      const remainingBlocks = targetSessions - i
+      const chunkSize = Math.ceil(remainingExercises / remainingBlocks)
+      const chunk = allExercises.slice(cursor, cursor + chunkSize)
+      cursor += chunkSize
+
+      if (chunk.length > 0) {
+        generated.push({
+          dayNumber: String(i + 1),
+          title: `Sessão ${i + 1}`,
+          exercises: chunk,
+        })
+      }
+    }
+
+    normalized = generated
+  }
 
   const levelDb = LEVEL_TO_DB[aiForm.level] || 'intermediate'
 
   return normalized.map((block, idx) => {
     const name = normalized.length > 1
-      ? `${planName} • Dia ${block.dayNumber}: ${block.title}`
+      ? `${planName} • Sessão ${idx + 1}: ${block.title}`
       : planName
 
     return {
@@ -255,7 +320,7 @@ function parseAIPlanToWorkouts({ aiPlan, aiForm, userId, planName }) {
       level: levelDb,
       estimated_duration_min: estimateWorkoutDuration(block.exercises),
       is_custom: true,
-      tags: ['ai', `dias:${aiForm.days}`, `bloco:${idx + 1}`],
+      tags: ['ai', `dias:${aiForm.days}`, `vezes:${aiForm.days}`, `bloco:${idx + 1}`],
       exercises: block.exercises,
     }
   })
@@ -270,12 +335,12 @@ function parseWorkoutIdentity(name = '') {
     }
   }
 
-  const dayMatch = String(name).match(/(dia\s*\d+[:\-].+)$/i)
-  if (dayMatch) {
-    const base = String(name).replace(dayMatch[0], '').replace(/[\-•:]\s*$/, '').trim()
+  const sessionMatch = String(name).match(/((?:dia|sess[aã]o)\s*\d+[:\-]?.*)$/i)
+  if (sessionMatch) {
+    const base = String(name).replace(sessionMatch[0], '').replace(/[\-•:]\s*$/, '').trim()
     return {
       programName: base || String(name),
-      sessionName: dayMatch[1],
+      sessionName: sessionMatch[1],
     }
   }
 
@@ -678,8 +743,8 @@ export default function Workouts() {
     name: '',
     style: 'Hipertrofia',
     level: 'Intermediário',
-    days: ['seg', 'ter', 'qua', 'qui', 'sex'],
-    byDay: getInitialManualByDay(),
+    daysPerWeek: '5',
+    byDay: getInitialManualBySession(),
   })
   const [aiForm, setAiForm] = useState({ level: 'Intermediário', goal: GOALS_LIST[0], days: '3', equipment: EQUIPMENT_OPTIONS[0] })
   const [aiPlan, setAiPlan] = useState('')
@@ -689,6 +754,7 @@ export default function Workouts() {
   const [workoutLogs, setWorkoutLogs] = useState([])
   const [logsLoading, setLogsLoading] = useState(false)
   const [cardioSaving, setCardioSaving] = useState(false)
+  const [cardioExpanded, setCardioExpanded] = useState(true)
   const [cardioFeedback, setCardioFeedback] = useState(null)
   const [cardioForm, setCardioForm] = useState({
     type: 'run',
@@ -987,10 +1053,16 @@ export default function Workouts() {
       const plan = await generateWorkoutPlan(aiForm)
       setAiPlan(plan)
       if (!aiPlanName.trim()) {
-        setAiPlanName(`Plano IA - ${aiForm.goal} (${aiForm.days} dias)`)
+        setAiPlanName(`Plano IA - ${aiForm.goal} (${aiForm.days}x semana)`)
       }
-    } catch {
-      setAiPlan('Erro ao gerar plano. Tente novamente.')
+    } catch (err) {
+      console.error(err)
+      const fallback = generateLocalWorkoutPlanText(aiForm)
+      setAiPlan(fallback)
+      if (!aiPlanName.trim()) {
+        setAiPlanName(`Plano Local - ${aiForm.goal} (${aiForm.days}x semana)`)
+      }
+      alert('IA indisponível no momento. Geramos um plano local para você continuar.')
     } finally {
       setAiLoading(false)
     }
@@ -1007,7 +1079,7 @@ export default function Workouts() {
       return
     }
 
-    const name = aiPlanName.trim() || `Plano IA - ${aiForm.goal} (${aiForm.days} dias)`
+    const name = aiPlanName.trim() || `Plano IA - ${aiForm.goal} (${aiForm.days}x semana)`
     const payloads = parseAIPlanToWorkouts({ aiPlan, aiForm, userId: user.id, planName: name })
 
     if (payloads.length === 0) {
@@ -1029,22 +1101,6 @@ export default function Workouts() {
     } finally {
       setAiSaving(false)
     }
-  }
-
-  const toggleDay = (dayId) => {
-    setManualForm(prev => {
-      const exists = prev.days.includes(dayId)
-      const nextDays = exists ? prev.days.filter(d => d !== dayId) : [...prev.days, dayId]
-      return { ...prev, days: nextDays }
-    })
-  }
-
-  const setFullWeek = () => {
-    setManualForm(prev => ({ ...prev, days: WEEK_DAYS.map(d => d.id) }))
-  }
-
-  const clearWeekSelection = () => {
-    setManualForm(prev => ({ ...prev, days: [] }))
   }
 
   const addExerciseToDay = (dayId) => {
@@ -1085,8 +1141,8 @@ export default function Workouts() {
       name: '',
       style: 'Hipertrofia',
       level: 'Intermediário',
-      days: ['seg', 'ter', 'qua', 'qui', 'sex'],
-      byDay: getInitialManualByDay(),
+      daysPerWeek: '5',
+      byDay: getInitialManualBySession(),
     })
   }
 
@@ -1099,8 +1155,9 @@ export default function Workouts() {
       alert('Informe um nome para o plano semanal.')
       return
     }
-    if (manualForm.days.length === 0) {
-      alert('Selecione ao menos um dia da semana.')
+    const selectedSessions = getSelectedSessions(manualForm.daysPerWeek)
+    if (selectedSessions.length === 0) {
+      alert('Selecione quantas vezes por semana você quer treinar.')
       return
     }
 
@@ -1108,8 +1165,8 @@ export default function Workouts() {
     let createdCount = 0
 
     try {
-      for (const dayId of manualForm.days) {
-        const dayLabel = WEEK_DAYS.find(d => d.id === dayId)?.label || dayId
+      for (const dayId of selectedSessions) {
+        const dayLabel = WEEK_SESSIONS.find(d => d.id === dayId)?.label || dayId
         const exercises = (manualForm.byDay[dayId] || [])
           .map(ex => ({
             ...ex,
@@ -1131,7 +1188,7 @@ export default function Workouts() {
           level: LEVEL_TO_DB[manualForm.level] || 'intermediate',
           estimated_duration_min: estimateWorkoutDuration(exercises),
           is_custom: true,
-          tags: ['manual', `estilo:${manualForm.style.toLowerCase()}`, `dia:${dayId}`],
+          tags: ['manual', `estilo:${manualForm.style.toLowerCase()}`, `sessao:${dayId}`],
           exercises,
         }
 
@@ -1148,7 +1205,7 @@ export default function Workouts() {
       setActiveTab('mine')
       setShowManualBuilder(false)
       resetManualForm()
-      alert(`Plano semanal criado com sucesso! ${createdCount} dia(s) salvo(s).`)
+      alert(`Plano semanal criado com sucesso! ${createdCount} sessão(ões) salva(s).`)
     } catch (err) {
       console.error(err)
       alert(`Não foi possível salvar o plano manual agora: ${err?.message || 'erro desconhecido'}`)
@@ -1167,7 +1224,7 @@ export default function Workouts() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4">
         <div>
           <h1 className="text-[22px] sm:text-[28px] font-semibold text-white mb-0.5">Meus Treinos</h1>
-          <p className="text-jp-gray text-sm sm:text-[15px]">Crie treinos manuais por dia da semana, use modelos ou IA</p>
+          <p className="text-jp-gray text-sm sm:text-[15px]">Crie treinos por sessões semanais, use modelos ou IA</p>
         </div>
         <div className="grid grid-cols-2 w-full sm:w-auto gap-1.5">
           <button
@@ -1244,33 +1301,27 @@ export default function Workouts() {
             </div>
 
             <div className="mb-4">
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <label className="text-jp-gray text-xs font-semibold uppercase tracking-wider">Dias da Semana</label>
-                <div className="flex gap-2">
-                  <button onClick={setFullWeek} className="text-xs text-jp-orange hover:underline">Semana completa</button>
-                  <button onClick={clearWeekSelection} className="text-xs text-jp-gray hover:text-white">Limpar</button>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
-                {WEEK_DAYS.map(day => (
+              <label className="text-jp-gray text-xs font-semibold uppercase tracking-wider block mb-2">Vezes por Semana</label>
+              <div className="flex gap-2 flex-wrap">
+                {['1', '2', '3', '4', '5', '6'].map(times => (
                   <button
-                    key={day.id}
-                    onClick={() => toggleDay(day.id)}
+                    key={times}
+                    onClick={() => setManualForm(f => ({ ...f, daysPerWeek: times }))}
                     className={`px-3 py-2 rounded-xl border text-sm transition-colors min-w-0 ${
-                      manualForm.days.includes(day.id)
-                        ? 'bg-jp-orange border-jp-orange text-white'
+                      manualForm.daysPerWeek === times
+                        ? 'bg-jp-orange border-jp-orange text-white font-semibold'
                         : 'bg-jp-card border-jp-border text-jp-gray hover:border-jp-orange/40'
                     }`}
                   >
-                    {day.label}
+                    {times}x
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="space-y-4">
-              {manualForm.days.map(dayId => {
-                const dayLabel = WEEK_DAYS.find(d => d.id === dayId)?.label || dayId
+              {getSelectedSessions(manualForm.daysPerWeek).map(dayId => {
+                const dayLabel = WEEK_SESSIONS.find(d => d.id === dayId)?.label || dayId
                 const dayExercises = manualForm.byDay[dayId] || []
 
                 return (
@@ -1389,7 +1440,7 @@ export default function Workouts() {
                 </div>
               </div>
               <div>
-                <label className="text-jp-gray text-xs font-semibold uppercase tracking-wider block mb-2">Dias por Semana</label>
+                <label className="text-jp-gray text-xs font-semibold uppercase tracking-wider block mb-2">Vezes por Semana</label>
                 <div className="flex gap-2">
                   {['2', '3', '4', '5', '6'].map(d => (
                     <button
@@ -1486,9 +1537,21 @@ export default function Workouts() {
       <section className="card p-3 sm:p-3.5 mb-4">
         <div className="flex items-center justify-between gap-2 mb-2">
           <h2 className="text-white font-semibold text-base sm:text-lg">Cardio</h2>
-          <span className="badge-dark text-[11px]">Corrida • Caminhada • Bicicleta</span>
+          <div className="flex items-center gap-2">
+            <span className="badge-dark text-[11px] hidden sm:inline-flex">Corrida • Caminhada • Bicicleta</span>
+            <button
+              onClick={() => setCardioExpanded(prev => !prev)}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-jp-border text-jp-gray hover:text-white hover:border-jp-orange/40 transition-colors"
+              aria-label={cardioExpanded ? 'Retrair seção de cardio' : 'Expandir seção de cardio'}
+              title={cardioExpanded ? 'Retrair' : 'Expandir'}
+            >
+              {cardioExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+          </div>
         </div>
 
+        {cardioExpanded && (
+        <>
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_280px] gap-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
             <div>
@@ -1607,6 +1670,8 @@ export default function Workouts() {
             )}
           </div>
         </div>
+        </>
+        )}
       </section>
 
       {/* Templates */}
@@ -1631,7 +1696,7 @@ export default function Workouts() {
           <div className="text-center py-16">
             <Dumbbell size={48} className="text-jp-border mx-auto mb-4" />
             <h3 className="text-white font-bold text-lg mb-2">Nenhum treino salvo ainda</h3>
-            <p className="text-jp-gray mb-6">Crie manualmente por dia da semana, copie um template ou use IA</p>
+            <p className="text-jp-gray mb-6">Crie manualmente por sessões semanais, copie um template ou use IA</p>
             <div className="flex gap-3 justify-center">
               <button onClick={() => setShowManualBuilder(true)} className="btn-secondary">
                 <Plus size={16} />
