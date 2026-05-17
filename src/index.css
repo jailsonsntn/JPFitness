@@ -1,0 +1,181 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: #0F0F0F;
+    color: #FFFFFF;
+    font-family: 'Inter', system-ui, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #1A1A1A;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #FF6200;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #CC4E00;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-jp-orange hover:bg-jp-orange-dark text-white font-semibold px-6 py-3 rounded-xl transition-all duration-200 inline-flex items-center gap-2 cursor-pointer;
+    box-shadow: 0 4px 15px rgba(255, 98, 0, 0.3);
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 6px 25px rgba(255, 98, 0, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .btn-secondary {
+    @apply border border-jp-orange text-jp-orange hover:bg-jp-orange hover:text-white font-semibold px-6 py-3 rounded-xl transition-all duration-200 inline-flex items-center gap-2 cursor-pointer;
+  }
+
+  .btn-ghost {
+    @apply text-jp-gray hover:text-white font-medium px-4 py-2 rounded-lg transition-all duration-200 cursor-pointer;
+  }
+
+  .card {
+    @apply bg-jp-card border border-jp-border rounded-2xl p-6 transition-all duration-300;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+  }
+
+  .card:hover {
+    border-color: rgba(255, 98, 0, 0.3);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.8);
+  }
+
+  .card-glow {
+    @apply card;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 98, 0, 0.1);
+  }
+
+  .input-dark {
+    @apply bg-jp-card-light border border-jp-border text-white placeholder-jp-gray rounded-xl px-4 py-3 focus:outline-none focus:border-jp-orange transition-colors duration-200 w-full;
+  }
+
+  .input-dark:focus {
+    box-shadow: 0 0 0 3px rgba(255, 98, 0, 0.1);
+  }
+
+  .badge {
+    @apply text-xs font-semibold px-2 py-1 rounded-full;
+  }
+
+  .badge-orange {
+    @apply badge bg-jp-orange text-white;
+  }
+
+  .badge-dark {
+    @apply badge bg-jp-border text-jp-gray-light;
+  }
+
+  .section-title {
+    @apply text-3xl md:text-4xl font-bold text-white mb-2;
+  }
+
+  .section-subtitle {
+    @apply text-jp-gray text-lg mb-8;
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, #FF6200, #FF8533);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .page-container {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8;
+  }
+
+  .tab-btn {
+    @apply px-4 py-2 rounded-xl font-medium text-sm transition-all duration-200 cursor-pointer;
+  }
+
+  .tab-btn-active {
+    @apply tab-btn bg-jp-orange text-white;
+    box-shadow: 0 4px 12px rgba(255, 98, 0, 0.3);
+  }
+
+  .tab-btn-inactive {
+    @apply tab-btn text-jp-gray hover:text-white bg-jp-card border border-jp-border hover:border-jp-orange;
+  }
+}
+
+@layer utilities {
+  .text-shadow-orange {
+    text-shadow: 0 0 30px rgba(255, 98, 0, 0.5);
+  }
+
+  .bg-noise {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  }
+}
+
+/* Chat typing indicator */
+.typing-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #FF6200;
+  animation: typing-bounce 1.4s infinite ease-in-out;
+}
+
+.typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typing-bounce {
+  0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* Progress ring */
+.progress-ring-circle {
+  transition: stroke-dashoffset 0.35s;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+}
+
+/* Gradient border effect */
+.gradient-border {
+  position: relative;
+  background: #1A1A1A;
+}
+
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, #FF6200, transparent, #FF6200);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
