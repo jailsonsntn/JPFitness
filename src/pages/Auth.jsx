@@ -70,8 +70,8 @@ export default function Auth() {
           </p>
           <div className="grid grid-cols-1 gap-4 text-left">
             {[
-              { icon: '🤖', title: 'AI Trainer 24/7', sub: 'Tire dúvidas e receba planos personalizados com Groq AI' },
-              { icon: '🍎', title: 'Nutrição Inteligente', sub: 'Analise refeições e gere dietas com Gemini AI' },
+              { icon: '🤖', title: 'AI Trainer 24/7', sub: 'Tire dúvidas e receba planos personalizados com IA' },
+              { icon: '🍎', title: 'Nutrição Inteligente', sub: 'Analise refeições e gere dietas com IA' },
               { icon: '📊', title: 'Progresso Real', sub: 'Acompanhe evolução com gráficos e métricas detalhadas' },
             ].map(({ icon, title, sub }) => (
               <div key={title} className="flex gap-4 p-4 bg-jp-card/60 rounded-xl border border-jp-border/50">

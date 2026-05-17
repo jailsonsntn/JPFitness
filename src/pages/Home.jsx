@@ -20,7 +20,7 @@ const features = [
     color: 'text-jp-orange',
     bg: 'bg-jp-orange/10',
     link: '/ai-trainer',
-    badge: 'Tecnologia Groq'
+    badge: 'Tecnologia de IA'
   },
   {
     icon: BookOpen,
@@ -34,11 +34,11 @@ const features = [
   {
     icon: Apple,
     title: 'Nutrição Inteligente',
-    description: 'Analise refeições com IA Gemini, acompanhe macros e receba planos alimentares personalizados para o seu objetivo.',
+    description: 'Analise refeições com IA, acompanhe macros e receba planos alimentares personalizados para o seu objetivo.',
     color: 'text-green-400',
     bg: 'bg-green-400/10',
     link: '/nutrition',
-    badge: 'Tecnologia Gemini'
+    badge: 'Tecnologia de IA'
   },
 ]
 

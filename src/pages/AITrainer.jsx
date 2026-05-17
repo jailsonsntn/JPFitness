@@ -214,7 +214,7 @@ export default function AITrainer() {
             <div>
               <h1 className="text-lg font-bold text-white flex items-center gap-2">
                 JPFitness AI
-                <span className="badge-orange text-xs">Tecnologia Groq</span>
+                <span className="badge-orange text-xs">Tecnologia de IA</span>
               </h1>
               <div className="flex items-center gap-1.5 text-xs text-green-400">
                 <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />

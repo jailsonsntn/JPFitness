@@ -1,12 +1,19 @@
 import { useState, useEffect } from 'react'
 import {
   Apple, Plus, Trash2, Search, Zap, ChevronDown, ChevronUp,
-  Calendar, Target, TrendingUp, Info, X, Loader
+  Calendar, Target, TrendingUp, Info, X, Loader, Save, Copy, Check, BookMarked
 } from 'lucide-react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { analyzeMeal, generateMealPlan, getNutritionTip } from '../services/geminiApi'
 import { useAuth } from '../context/AuthContext'
-import { getFoodLogs, createFoodLog, deleteFoodLog } from '../services/dbService'
+import {
+  getFoodLogs,
+  createFoodLog,
+  deleteFoodLog,
+  getSavedAIResponses,
+  saveAIResponse,
+  deleteAIResponse,
+} from '../services/dbService'
 
 const GOALS = [
   { id: 'weight_loss', label: 'Perda de peso', emoji: '🔥', calories: 1800 },
@@ -123,6 +130,62 @@ function MealAnalysisModal({ result, onClose }) {
   )
 }
 
+function parsePlanSections(text) {
+  const lines = String(text || '').replace(/\r/g, '').split('\n')
+  const sections = []
+  let current = { title: 'Resumo', lines: [] }
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (!line) continue
+    if (/^---+$/.test(line)) continue
+
+    const headingMatch = line.match(/^#{1,3}\s*(.+)$/)
+    if (headingMatch) {
+      if (current.lines.length > 0 || current.title) sections.push(current)
+      current = { title: headingMatch[1], lines: [] }
+      continue
+    }
+
+    current.lines.push(line)
+  }
+
+  if (current.title || current.lines.length > 0) sections.push(current)
+  return sections.filter(s => s.title || s.lines.length)
+}
+
+function PlanSectionView({ title, lines }) {
+  return (
+    <div className="rounded-xl border border-jp-border bg-jp-card-light p-4">
+      {title && <h4 className="text-white font-bold mb-2">{title}</h4>}
+      <div className="space-y-1.5">
+        {lines.map((line, idx) => {
+          if (/^[-*]\s+/.test(line)) {
+            return (
+              <p key={idx} className="text-sm text-jp-gray-light flex gap-2">
+                <span className="text-jp-orange">•</span>
+                <span>{line.replace(/^[-*]\s+/, '')}</span>
+              </p>
+            )
+          }
+
+          const numbered = line.match(/^(\d+)\.\s+(.+)$/)
+          if (numbered) {
+            return (
+              <p key={idx} className="text-sm text-jp-gray-light flex gap-2">
+                <span className="text-jp-orange font-semibold">{numbered[1]}.</span>
+                <span>{numbered[2]}</span>
+              </p>
+            )
+          }
+
+          return <p key={idx} className="text-sm text-jp-gray-light">{line}</p>
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function Nutrition() {
   const { user, profile } = useAuth()
   const [selectedGoal, setSelectedGoal] = useState(GOALS[0])
@@ -132,6 +195,10 @@ export default function Nutrition() {
   const [foodLog, setFoodLog] = useState([])
   const [mealPlan, setMealPlan] = useState('')
   const [planLoading, setPlanLoading] = useState(false)
+  const [savingPlan, setSavingPlan] = useState(false)
+  const [savedPlans, setSavedPlans] = useState([])
+  const [expandedSavedPlanId, setExpandedSavedPlanId] = useState(null)
+  const [copiedSavedPlanId, setCopiedSavedPlanId] = useState(null)
   const [tip, setTip] = useState('')
   const [tipLoading, setTipLoading] = useState(true)
   const [restrictions, setRestrictions] = useState('')
@@ -149,6 +216,17 @@ export default function Nutrition() {
   useEffect(() => {
     if (!user) return
     getFoodLogs(user.id).then(logs => setFoodLog(logs)).catch(console.error)
+  }, [user])
+
+  useEffect(() => {
+    if (!user) {
+      setSavedPlans([])
+      return
+    }
+
+    getSavedAIResponses(user.id, 'nutrition_plan', 30)
+      .then(setSavedPlans)
+      .catch(console.error)
   }, [user])
 
   useEffect(() => {
@@ -204,6 +282,53 @@ export default function Nutrition() {
       setPlanLoading(false)
     }
   }
+
+  const handleSaveMealPlan = async () => {
+    if (!mealPlan || /^erro ao gerar plano/i.test(mealPlan.trim())) return
+
+    if (!user) {
+      alert('Faça login para salvar respostas da IA.')
+      return
+    }
+
+    setSavingPlan(true)
+    try {
+      const saved = await saveAIResponse({
+        user_id: user.id,
+        response_type: 'nutrition_plan',
+        title: `Plano Alimentar • ${selectedGoal.label}`,
+        content: mealPlan,
+        metadata: {
+          goalId: selectedGoal.id,
+          goalLabel: selectedGoal.label,
+          restrictions: restrictions || null,
+        },
+      })
+
+      setSavedPlans(prev => [saved, ...prev])
+      alert('Plano salvo com sucesso!')
+    } catch {
+      alert('Erro ao salvar plano. Tente novamente.')
+    } finally {
+      setSavingPlan(false)
+    }
+  }
+
+  const handleDeleteSavedPlan = async (id) => {
+    if (user) {
+      await deleteAIResponse(id).catch(console.error)
+    }
+    setSavedPlans(prev => prev.filter(item => item.id !== id))
+    if (expandedSavedPlanId === id) setExpandedSavedPlanId(null)
+  }
+
+  const copySavedPlan = async (plan) => {
+    await navigator.clipboard.writeText(plan.content)
+    setCopiedSavedPlanId(plan.id)
+    setTimeout(() => setCopiedSavedPlanId(null), 1400)
+  }
+
+  const generatedPlanSections = parsePlanSections(mealPlan)
 
   const removeFromLog = async (id) => {
     if (user) {
@@ -368,7 +493,7 @@ export default function Nutrition() {
               Plano Alimentar IA
             </h2>
             <p className="text-jp-gray text-sm mb-4">
-              Gere um plano alimentar completo para o dia com o Gemini AI.
+              Gere um plano alimentar completo para o dia com IA.
             </p>
 
             <button
@@ -395,7 +520,7 @@ export default function Nutrition() {
               className="btn-primary w-full justify-center disabled:opacity-40"
             >
               {planLoading ? (
-                <><LoadingSpinner size="sm" /> Gerando com Gemini...</>
+                <><LoadingSpinner size="sm" /> Gerando plano...</>
               ) : (
                 <><Zap size={16} /> Gerar Plano para {selectedGoal.label}</>
               )}
@@ -403,17 +528,93 @@ export default function Nutrition() {
 
             {mealPlan && (
               <div className="mt-4 bg-jp-card-light border border-jp-border rounded-xl p-4 max-h-[500px] overflow-y-auto">
-                <p className="text-xs font-semibold text-jp-orange uppercase tracking-wider mb-3">
-                  Plano Alimentar • {selectedGoal.label}
-                </p>
-                <div
-                  className="text-sm text-jp-gray-light leading-relaxed whitespace-pre-wrap"
-                  style={{ fontSize: '13px' }}
-                >
-                  {mealPlan}
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <p className="text-xs font-semibold text-jp-orange uppercase tracking-wider">
+                    Plano Alimentar • {selectedGoal.label}
+                  </p>
+                  {!/^erro ao gerar plano/i.test(mealPlan.trim()) && (
+                    <button
+                      onClick={handleSaveMealPlan}
+                      disabled={savingPlan}
+                      className="text-xs px-3 py-1.5 rounded-lg border border-jp-border text-jp-gray-light hover:text-white hover:border-jp-orange/50 transition-colors disabled:opacity-40 inline-flex items-center gap-1"
+                    >
+                      <Save size={12} />
+                      {savingPlan ? 'Salvando...' : 'Salvar resposta'}
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  {generatedPlanSections.map((section, idx) => (
+                    <PlanSectionView key={`${section.title}-${idx}`} title={section.title} lines={section.lines} />
+                  ))}
                 </div>
               </div>
             )}
+
+            <div className="mt-4 border border-jp-border rounded-xl p-4 bg-jp-card-light/40">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold text-jp-orange uppercase tracking-wider inline-flex items-center gap-1.5">
+                  <BookMarked size={12} />
+                  Respostas salvas
+                </p>
+                <span className="text-xs text-jp-gray">{savedPlans.length}</span>
+              </div>
+
+              {savedPlans.length === 0 ? (
+                <p className="text-sm text-jp-gray">Nenhuma resposta salva ainda.</p>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {savedPlans.map(plan => {
+                    const isOpen = expandedSavedPlanId === plan.id
+                    const sections = parsePlanSections(plan.content)
+                    return (
+                      <div key={plan.id} className="border border-jp-border rounded-lg bg-jp-card p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm text-white font-semibold truncate">{plan.title}</p>
+                            <p className="text-xs text-jp-gray mt-0.5">
+                              {new Date(plan.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => copySavedPlan(plan)}
+                              className="p-1.5 rounded text-jp-gray hover:text-white hover:bg-jp-border"
+                              title="Copiar"
+                            >
+                              {copiedSavedPlanId === plan.id ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                            </button>
+                            <button
+                              onClick={() => setExpandedSavedPlanId(isOpen ? null : plan.id)}
+                              className="p-1.5 rounded text-jp-gray hover:text-white hover:bg-jp-border"
+                              title={isOpen ? 'Recolher' : 'Abrir'}
+                            >
+                              {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteSavedPlan(plan.id)}
+                              className="p-1.5 rounded text-jp-gray hover:text-red-400 hover:bg-jp-border"
+                              title="Excluir"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {isOpen && (
+                          <div className="mt-3 space-y-2">
+                            {sections.map((section, idx) => (
+                              <PlanSectionView key={`${plan.id}-${idx}`} title={section.title} lines={section.lines} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

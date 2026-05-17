@@ -201,7 +201,7 @@ export default function Dashboard() {
             <Zap size={20} className="text-jp-orange" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-jp-orange mb-1">Motivação do Dia • Groq AI</p>
+            <p className="text-xs font-semibold text-jp-orange mb-1">Motivação do Dia • IA</p>
             {quoteLoading ? (
               <LoadingSpinner size="sm" text="Carregando motivação..." />
             ) : (

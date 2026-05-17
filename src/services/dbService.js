@@ -337,6 +337,43 @@ export async function clearChatMessages(userId) {
   if (error) throw error
 }
 
+// ─── SAVED AI RESPONSES ──────────────────────────────────────
+
+export async function getSavedAIResponses(userId, responseType = null, limit = 50) {
+  let query = supabase
+    .from('saved_ai_responses')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (responseType) {
+    query = query.eq('response_type', responseType)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+  return data || []
+}
+
+export async function saveAIResponse(response) {
+  const { data, error } = await supabase
+    .from('saved_ai_responses')
+    .insert(response)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteAIResponse(id) {
+  const { error } = await supabase
+    .from('saved_ai_responses')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
+}
+
 // ─── SAVED EXERCISES ──────────────────────────────────────────
 
 export async function getSavedExercises(userId) {

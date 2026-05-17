@@ -169,6 +169,21 @@ create table if not exists public.chat_messages (
 
 comment on table public.chat_messages is 'Histórico de mensagens com o AI Trainer (Groq)';
 
+-- =============================================================
+-- TABELA: saved_ai_responses (respostas/plano gerados por IA)
+-- =============================================================
+create table if not exists public.saved_ai_responses (
+  id            uuid primary key default uuid_generate_v4(),
+  user_id       uuid not null references auth.users on delete cascade,
+  response_type text not null,
+  title         text not null,
+  content       text not null,
+  metadata      jsonb,
+  created_at    timestamptz not null default now()
+);
+
+comment on table public.saved_ai_responses is 'Respostas de IA salvas pelo usuario (ex.: planos alimentares e resumos).';
+
 -- Índice para busca rápida por usuário ordenada por data
 create index if not exists chat_messages_user_created_idx
   on public.chat_messages (user_id, created_at desc);
@@ -214,6 +229,7 @@ create index if not exists body_measurements_user_date_idx on public.body_measur
 create index if not exists workout_exercises_workout_idx on public.workout_exercises (workout_id, order_index);
 create index if not exists workouts_user_idx             on public.workouts (user_id, created_at desc);
 create index if not exists saved_exercises_user_idx      on public.saved_exercises (user_id, saved_at desc);
+create index if not exists saved_ai_responses_user_idx   on public.saved_ai_responses (user_id, created_at desc);
 
 -- =============================================================
 -- ROW LEVEL SECURITY (RLS)
@@ -226,6 +242,7 @@ alter table public.workout_log_sets   enable row level security;
 alter table public.food_logs          enable row level security;
 alter table public.body_measurements  enable row level security;
 alter table public.chat_messages      enable row level security;
+alter table public.saved_ai_responses enable row level security;
 alter table public.user_streaks       enable row level security;
 alter table public.saved_exercises    enable row level security;
 
@@ -280,6 +297,10 @@ create policy "body_measurements: all own"
 -- --- chat_messages ---
 create policy "chat_messages: all own"
   on public.chat_messages for all using (auth.uid() = user_id);
+
+-- --- saved_ai_responses ---
+create policy "saved_ai_responses: all own"
+  on public.saved_ai_responses for all using (auth.uid() = user_id);
 
 -- --- user_streaks ---
 create policy "user_streaks: all own"
