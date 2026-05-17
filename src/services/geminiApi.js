@@ -1,8 +1,12 @@
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta'
-const MODEL = 'gemini-1.5-flash'
+const MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-flash-latest'
 
 async function generateContent(prompt) {
+  if (!GEMINI_API_KEY) {
+    throw new Error('VITE_GEMINI_API_KEY não configurada.')
+  }
+
   const response = await fetch(
     `${GEMINI_BASE_URL}/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`,
     {
@@ -20,7 +24,7 @@ async function generateContent(prompt) {
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}))
-    throw new Error(err.error?.message || 'Gemini API error')
+    throw new Error(err.error?.message || `Gemini API error (${response.status})`)
   }
 
   const data = await response.json()
