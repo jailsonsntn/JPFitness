@@ -203,7 +203,7 @@ export default function AITrainer() {
   }
 
   return (
-    <div className="pt-16 h-screen flex flex-col">
+    <div className="h-screen flex flex-col">
       {/* Header */}
       <div className="bg-jp-dark/95 backdrop-blur-md border-b border-jp-border px-4 sm:px-6 lg:px-8 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">

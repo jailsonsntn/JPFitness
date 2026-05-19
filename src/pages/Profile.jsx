@@ -95,7 +95,7 @@ export default function Profile() {
   }
 
   return (
-    <div className="page-container pt-24 max-w-3xl">
+    <div className="page-container max-w-3xl">
       {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         <button onClick={() => navigate(-1)} className="p-2 rounded-xl bg-jp-card border border-jp-border text-jp-gray hover:text-white transition-colors">

@@ -7,22 +7,22 @@ export default {
   theme: {
     extend: {
       colors: {
-        'jp-black': '#0F0F0F',
-        'jp-dark': '#121212',
-        'jp-card': '#1A1A1A',
-        'jp-card-light': '#1E1E1E',
+        'jp-black': '#000000',
+        'jp-dark': '#000000',
+        'jp-card': '#0A0A0A',
+        'jp-card-light': '#121212',
         'jp-orange': '#FF6200',
         'jp-orange-dark': '#CC4E00',
         'jp-orange-light': '#FF8533',
         'jp-gray': '#A0A0A0',
         'jp-gray-light': '#D1D1D1',
-        'jp-border': '#2A2A2A',
-        'jp-border-light': '#333333',
+        'jp-border': '#1A1A1A',
+        'jp-border-light': '#252525',
       },
       backgroundImage: {
-        'gradient-hero': 'linear-gradient(135deg, #0F0F0F 0%, #1a0800 50%, #0F0F0F 100%)',
+        'gradient-hero': 'linear-gradient(135deg, #000000 0%, #000000 50%, #000000 100%)',
         'gradient-orange': 'linear-gradient(135deg, #FF6200, #CC4E00)',
-        'gradient-card': 'linear-gradient(135deg, #1A1A1A, #1E1E1E)',
+        'gradient-card': 'linear-gradient(135deg, #0A0A0A, #121212)',
         'gradient-glow': 'radial-gradient(ellipse at center, rgba(255,98,0,0.15) 0%, transparent 70%)',
       },
       fontFamily: {

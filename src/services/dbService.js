@@ -126,11 +126,53 @@ export async function createWorkout(workout) {
       sets: ex.sets,
       reps: ex.reps,
       rest_seconds: ex.rest_seconds || parseRestToSeconds(ex.rest),
+      weight_kg: parseWeightToKg(ex.weight_kg ?? ex.weightKg),
       notes: ex.notes?.trim() || null,
       order_index: i
     }))
     const { error: exErr } = await supabase.from('workout_exercises').insert(exRows)
     if (exErr) throw exErr
+  }
+
+  return data
+}
+
+export async function updateWorkout(id, workout) {
+  const { exercises, ...workoutData } = workout
+
+  const { data, error } = await supabase
+    .from('workouts')
+    .update(workoutData)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+
+  if (Array.isArray(exercises)) {
+    const { error: deleteErr } = await supabase
+      .from('workout_exercises')
+      .delete()
+      .eq('workout_id', id)
+
+    if (deleteErr) throw deleteErr
+
+    if (exercises.length > 0) {
+      const exRows = exercises.map((ex, i) => ({
+        workout_id: id,
+        exercise_name: ex.name || ex.exercise_name,
+        exercise_id: ex.exercise_id || null,
+        sets: ex.sets,
+        reps: ex.reps,
+        rest_seconds: ex.rest_seconds || parseRestToSeconds(ex.rest),
+        weight_kg: parseWeightToKg(ex.weight_kg ?? ex.weightKg),
+        notes: ex.notes?.trim() || null,
+        order_index: i,
+      }))
+
+      const { error: exErr } = await supabase.from('workout_exercises').insert(exRows)
+      if (exErr) throw exErr
+    }
   }
 
   return data
@@ -369,5 +411,11 @@ function parseRestToSeconds(rest) {
   if (!rest) return 60
   const match = String(rest).match(/(\d+)/)
   return match ? parseInt(match[1]) : 60
+}
+
+function parseWeightToKg(weight) {
+  if (weight === null || weight === undefined || weight === '') return null
+  const parsed = parseFloat(String(weight).replace(',', '.'))
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
 }
 

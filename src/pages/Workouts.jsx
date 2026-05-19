@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   Plus, Trash2, Play, Clock, Dumbbell, ChevronDown, ChevronUp,
-  Zap, Copy, Star, CheckCircle2, X, Save
+  Zap, Copy, Star, CheckCircle2, X, Save, Pencil
 } from 'lucide-react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { generateWorkoutPlan } from '../services/groqApi'
 import { supabase } from '../services/supabase'
 import { useAuth } from '../context/AuthContext'
-import { getWorkouts, createWorkout, deleteWorkout, createWorkoutLog, getWorkoutLogs, parseWorkoutLogMeta } from '../services/dbService'
+import { getWorkouts, createWorkout, updateWorkout, deleteWorkout, createWorkoutLog, getWorkoutLogs, parseWorkoutLogMeta } from '../services/dbService'
 
 const EXERCISE_META_PREFIX = '__JPFITNESS_META__'
 
@@ -78,12 +78,12 @@ const LEVELS = ['Iniciante', 'Intermediário', 'Avançado']
 const GOALS_LIST = ['Ganho de massa muscular', 'Perda de gordura', 'Força máxima', 'Resistência', 'Condicionamento geral']
 const EQUIPMENT_OPTIONS = ['Academia completa', 'Halteres e barras', 'Apenas peso corporal', 'Elásticos e kettlebells']
 const WEEK_SESSIONS = [
-  { id: 's1', label: 'Sessão 1' },
-  { id: 's2', label: 'Sessão 2' },
-  { id: 's3', label: 'Sessão 3' },
-  { id: 's4', label: 'Sessão 4' },
-  { id: 's5', label: 'Sessão 5' },
-  { id: 's6', label: 'Sessão 6' },
+  { id: 's1', label: 'Treino 1' },
+  { id: 's2', label: 'Treino 2' },
+  { id: 's3', label: 'Treino 3' },
+  { id: 's4', label: 'Treino 4' },
+  { id: 's5', label: 'Treino 5' },
+  { id: 's6', label: 'Treino 6' },
 ]
 
 const LEVEL_TO_DB = {
@@ -110,7 +110,19 @@ function createEmptyExercise() {
     sets: 3,
     reps: '10-12',
     rest: '60s',
+    weightKg: '',
     notes: '',
+  }
+}
+
+function createEditableExercise(exercise = {}) {
+  return {
+    name: exercise.name || exercise.exercise_name || '',
+    sets: Number(exercise.sets) || 3,
+    reps: exercise.reps || '10-12',
+    rest: exercise.rest || (exercise.rest_seconds ? `${exercise.rest_seconds}s` : '60s'),
+    weightKg: exercise.weightKg ?? exercise.weight_kg ?? '',
+    notes: exercise.notes || '',
   }
 }
 
@@ -157,6 +169,7 @@ function normalizeWorkout(workout) {
         sets: ex.sets,
         reps: ex.reps,
         rest: ex.rest_seconds ? `${ex.rest_seconds}s` : (ex.rest || '60s'),
+        weightKg: ex.weight_kg ?? '',
         notes: meta.notes,
       }
     }),
@@ -231,7 +244,7 @@ function generateLocalWorkoutPlanText({ goal, days }) {
     const title = focus[i % focus.length]
     const exercises = banks[i % banks.length]
     blocks.push([
-      `Sessão ${i + 1}: ${title}`,
+      `Treino ${i + 1}: ${title}`,
       ...exercises.map(ex => `- ${ex}: 3 séries de 10-12 repetições`),
       ''
     ].join('\n'))
@@ -253,7 +266,7 @@ function parseAIPlanToWorkouts({ aiPlan, aiForm, userId, planName }) {
     if (blockMatch) {
       current = {
         dayNumber: blockMatch[1],
-        title: blockMatch[2]?.trim() || `Sessão ${blockMatch[1]}`,
+        title: blockMatch[2]?.trim() || `Treino ${blockMatch[1]}`,
         exercises: [],
       }
       blocks.push(current)
@@ -296,7 +309,7 @@ function parseAIPlanToWorkouts({ aiPlan, aiForm, userId, planName }) {
       if (chunk.length > 0) {
         generated.push({
           dayNumber: String(i + 1),
-          title: `Sessão ${i + 1}`,
+          title: `Treino ${i + 1}`,
           exercises: chunk,
         })
       }
@@ -309,7 +322,7 @@ function parseAIPlanToWorkouts({ aiPlan, aiForm, userId, planName }) {
 
   return normalized.map((block, idx) => {
     const name = normalized.length > 1
-      ? `${planName} • Sessão ${idx + 1}: ${block.title}`
+      ? `${planName} • Treino ${idx + 1}: ${block.title}`
       : planName
 
     return {
@@ -415,15 +428,17 @@ function estimateCardioCalories(type, durationMin, distanceKm, weightKg) {
   return { calories, met, speedKmh, paceMinKm }
 }
 
-function WorkoutCard({ workout, onStart, onDelete, onCopy }) {
+function WorkoutCard({ workout, onStart, onDelete, onCopy, onEdit }) {
   const [expanded, setExpanded] = useState(false)
   const displayName = workout.sessionName || workout.name
+  const previewExercises = workout.exercises.slice(0, 3)
+  const hasMoreExercises = workout.exercises.length > previewExercises.length
 
   return (
-    <div className="card flex flex-col overflow-hidden p-3 sm:p-3.5">
+    <div className="card flex flex-col overflow-hidden p-3 sm:p-3.5 border border-jp-border/80 hover:border-jp-orange/40 transition-colors">
       <div className="flex items-start justify-between gap-2 mb-2.5">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span className="text-base">{workout.emoji || '💪'}</span>
+          <span className="text-xl leading-none">{workout.emoji || '💪'}</span>
           <div className="min-w-0 space-y-1.5">
             <h3 className="text-white font-medium text-[14px] sm:text-[15px] leading-tight line-clamp-1 break-words">{displayName}</h3>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -454,6 +469,16 @@ function WorkoutCard({ workout, onStart, onDelete, onCopy }) {
               Copiar
             </button>
           )}
+          {onEdit && (
+            <button
+              onClick={() => onEdit(workout)}
+              className="p-2 text-jp-gray hover:text-blue-300 rounded-lg hover:bg-jp-border transition-colors"
+              title="Editar treino"
+              aria-label="Editar treino"
+            >
+              <Pencil size={15} />
+            </button>
+          )}
           <button
             onClick={() => setExpanded(!expanded)}
             className="p-2 text-jp-gray hover:text-white rounded-lg hover:bg-jp-border transition-colors"
@@ -471,6 +496,23 @@ function WorkoutCard({ workout, onStart, onDelete, onCopy }) {
         </div>
       </div>
 
+      {!expanded && (
+        <div className="mb-2.5 rounded-xl border border-jp-border bg-jp-card-light/40 p-2.5">
+          <p className="text-[11px] uppercase tracking-wider text-jp-gray mb-1.5">Resumo rápido</p>
+          <div className="space-y-1">
+            {previewExercises.map((ex, idx) => (
+              <div key={`${ex.name}-${idx}`} className="flex items-center justify-between gap-2 text-xs">
+                <p className="text-jp-gray-light truncate">{idx + 1}. {ex.name}</p>
+                <span className="text-jp-orange font-semibold whitespace-nowrap">{ex.sets}x{ex.reps}</span>
+              </div>
+            ))}
+            {hasMoreExercises && (
+              <p className="text-[11px] text-jp-gray">+{workout.exercises.length - previewExercises.length} exercício(s)</p>
+            )}
+          </div>
+        </div>
+      )}
+
       {expanded && (
         <div className="border-t border-jp-border pt-2.5 mt-1.5 space-y-1.5">
           {workout.exercises.map((ex, i) => (
@@ -484,6 +526,7 @@ function WorkoutCard({ workout, onStart, onDelete, onCopy }) {
                 </div>
                 <div className="flex gap-3 text-xs text-jp-gray flex-shrink-0">
                   <span className="text-jp-orange font-semibold">{ex.sets}x{ex.reps}</span>
+                  {Number(ex.weightKg) > 0 && <span>{Number(ex.weightKg).toFixed(1)} kg</span>}
                   <span>⏱ {ex.rest}</span>
                 </div>
               </div>
@@ -654,7 +697,7 @@ function ActiveWorkout({ workout, onFinish, onBack }) {
               <p className="text-white font-semibold text-lg">{maxWeight > 0 ? `${maxWeight.toFixed(1)} kg` : '—'}</p>
             </div>
             <div className="rounded-xl border border-jp-border bg-jp-card-light p-3">
-              <p className="text-xs text-jp-gray mb-1">Volume da sessão</p>
+              <p className="text-xs text-jp-gray mb-1">Volume do treino</p>
               <p className="text-white font-semibold text-lg">{totalVolume > 0 ? `${Math.round(totalVolume)} kg-reps` : '—'}</p>
             </div>
           </div>
@@ -675,7 +718,18 @@ function ActiveWorkout({ workout, onFinish, onBack }) {
                       {allDone && <CheckCircle2 size={14} className="text-green-400" />}
                     </div>
                     <h3 className="text-white font-semibold text-base sm:text-base leading-tight">{ex.name}</h3>
-                    <p className="text-jp-gray text-xs sm:text-sm">{ex.reps} repetições • Descanso: {ex.rest}</p>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <p className="text-jp-gray text-xs sm:text-sm">{ex.reps} repetições • Descanso: {ex.rest}</p>
+                      <a
+                        href={`https://www.youtube.com/results?search_query=${encodeURIComponent(ex.name + ' como fazer exercício')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] text-red-400 hover:text-red-300 transition-colors"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8zM9.5 15.6V8.4l6.3 3.6-6.3 3.6z"/></svg>
+                        Ver vídeo
+                      </a>
+                    </div>
                   </div>
                 </div>
 
@@ -757,6 +811,16 @@ export default function Workouts() {
   const [cardioExpanded, setCardioExpanded] = useState(true)
   const [expandedPrograms, setExpandedPrograms] = useState({})
   const [cardioFeedback, setCardioFeedback] = useState(null)
+  const [editingWorkout, setEditingWorkout] = useState(null)
+  const [editSaving, setEditSaving] = useState(false)
+  const [editForm, setEditForm] = useState({
+    name: '',
+    level: 'Intermediário',
+    durationMin: '45',
+    emoji: '💪',
+    description: '',
+    exercises: [createEditableExercise()],
+  })
   const [cardioForm, setCardioForm] = useState({
     type: 'run',
     durationMin: '20',
@@ -1039,6 +1103,91 @@ export default function Workouts() {
     setMyWorkouts(prev => prev.filter(w => w.id !== id))
   }
 
+  const handleOpenEditWorkout = (workout) => {
+    setEditingWorkout(workout)
+    setEditForm({
+      name: workout.name || '',
+      level: workout.level || 'Intermediário',
+      durationMin: String(parseInt(workout.duration, 10) || 45),
+      emoji: workout.emoji || '💪',
+      description: workout.description || '',
+      exercises: (workout.exercises || []).length
+        ? workout.exercises.map(createEditableExercise)
+        : [createEditableExercise()],
+    })
+  }
+
+  const addExerciseToEdit = () => {
+    setEditForm(prev => ({
+      ...prev,
+      exercises: [...prev.exercises, createEditableExercise()],
+    }))
+  }
+
+  const updateEditExerciseField = (index, field, value) => {
+    setEditForm(prev => ({
+      ...prev,
+      exercises: prev.exercises.map((exercise, i) => (i === index ? { ...exercise, [field]: value } : exercise)),
+    }))
+  }
+
+  const removeEditExercise = (index) => {
+    setEditForm(prev => {
+      const next = prev.exercises.filter((_, i) => i !== index)
+      return {
+        ...prev,
+        exercises: next.length ? next : [createEditableExercise()],
+      }
+    })
+  }
+
+  const handleSaveWorkoutEdit = async () => {
+    if (!editingWorkout?.id) return
+
+    const name = editForm.name.trim()
+    if (!name) {
+      alert('Informe um nome para o treino.')
+      return
+    }
+
+    const exercises = editForm.exercises
+      .map(ex => ({
+        name: ex.name.trim(),
+        sets: Number(ex.sets) || 3,
+        reps: String(ex.reps || '').trim() || '10-12',
+        rest: String(ex.rest || '').trim() || '60s',
+        weightKg: String(ex.weightKg || '').trim(),
+        notes: String(ex.notes || '').trim(),
+      }))
+      .filter(ex => ex.name)
+
+    if (exercises.length === 0) {
+      alert('Adicione pelo menos 1 exercício válido.')
+      return
+    }
+
+    setEditSaving(true)
+    try {
+      await updateWorkout(editingWorkout.id, {
+        name,
+        description: editForm.description.trim() || null,
+        emoji: editForm.emoji || '💪',
+        level: LEVEL_TO_DB[editForm.level] || 'intermediate',
+        estimated_duration_min: Math.max(20, Number(editForm.durationMin) || estimateWorkoutDuration(exercises)),
+        exercises,
+      })
+
+      await loadWorkouts()
+      setEditingWorkout(null)
+      alert('Treino atualizado com sucesso!')
+    } catch (err) {
+      console.error(err)
+      alert(`Não foi possível atualizar o treino: ${err?.message || 'erro desconhecido'}`)
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
   const handleCopyTemplate = async (template) => {
     const copy = {
       user_id: user?.id,
@@ -1191,6 +1340,7 @@ export default function Workouts() {
             sets: Number(ex.sets) || 3,
             reps: ex.reps.trim() || '10',
             rest: ex.rest.trim() || '60s',
+            weightKg: String(ex.weightKg || '').trim(),
             notes: ex.notes.trim(),
           }))
           .filter(ex => ex.name)
@@ -1222,7 +1372,7 @@ export default function Workouts() {
       setActiveTab('mine')
       setShowManualBuilder(false)
       resetManualForm()
-      alert(`Plano semanal criado com sucesso! ${createdCount} sessão(ões) salva(s).`)
+      alert(`Plano semanal criado com sucesso! ${createdCount} treino(s) salvo(s).`)
     } catch (err) {
       console.error(err)
       alert(`Não foi possível salvar o plano manual agora: ${err?.message || 'erro desconhecido'}`)
@@ -1236,12 +1386,12 @@ export default function Workouts() {
   }
 
   return (
-    <div className="page-container !pt-28 sm:!pt-24">
+    <div className="page-container">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4">
         <div>
           <h1 className="text-[22px] sm:text-[28px] font-semibold text-white mb-0.5">Meus Treinos</h1>
-          <p className="text-jp-gray text-sm sm:text-[15px]">Crie treinos por sessões semanais, use modelos ou IA</p>
+          <p className="text-jp-gray text-sm sm:text-[15px]">Crie treinos semanais de forma simples, use modelos ou IA</p>
         </div>
         <div className="grid grid-cols-2 w-full sm:w-auto gap-1.5">
           <button
@@ -1284,6 +1434,7 @@ export default function Workouts() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="text-jp-gray text-xs font-semibold uppercase tracking-wider block mb-2">Nome do Plano</label>
+                <p className="text-[11px] text-jp-gray mb-2">Nome que vai aparecer na sua lista de treinos.</p>
                 <input
                   value={manualForm.name}
                   onChange={e => setManualForm(f => ({ ...f, name: e.target.value }))}
@@ -1293,6 +1444,7 @@ export default function Workouts() {
               </div>
               <div>
                 <label className="text-jp-gray text-xs font-semibold uppercase tracking-wider block mb-2">Estilo de Treino</label>
+                <p className="text-[11px] text-jp-gray mb-2">Seu foco principal: hipertrofia, força, resistência...</p>
                 <input
                   value={manualForm.style}
                   onChange={e => setManualForm(f => ({ ...f, style: e.target.value }))}
@@ -1304,6 +1456,7 @@ export default function Workouts() {
 
             <div className="mb-5">
               <label className="text-jp-gray text-xs font-semibold uppercase tracking-wider block mb-2">Nível</label>
+              <p className="text-[11px] text-jp-gray mb-2">Dificuldade geral do plano para melhor organização.</p>
               <div className="flex gap-2 flex-wrap">
                 {LEVELS.map(level => (
                   <button
@@ -1319,6 +1472,7 @@ export default function Workouts() {
 
             <div className="mb-4">
               <label className="text-jp-gray text-xs font-semibold uppercase tracking-wider block mb-2">Vezes por Semana</label>
+              <p className="text-[11px] text-jp-gray mb-2">Quantos treinos você quer montar nesta semana.</p>
               <div className="flex gap-2 flex-wrap">
                 {['1', '2', '3', '4', '5', '6'].map(times => (
                   <button
@@ -1350,49 +1504,76 @@ export default function Workouts() {
                       </button>
                     </div>
 
+                    <p className="text-[11px] text-jp-gray mb-3">Preencha só o essencial para adicionar rápido.</p>
+
                     <div className="space-y-3">
                       {dayExercises.map((ex, index) => (
                         <div key={`${dayId}-${index}`} className="border border-jp-border rounded-lg p-3">
-                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-2">
-                            <input
-                              value={ex.name}
-                              onChange={e => updateExerciseField(dayId, index, 'name', e.target.value)}
-                              placeholder="Nome do exercício"
-                              className="input-dark sm:col-span-2"
-                            />
-                            <input
-                              type="number"
-                              min="1"
-                              value={ex.sets}
-                              onChange={e => updateExerciseField(dayId, index, 'sets', e.target.value)}
-                              placeholder="Séries"
-                              className="input-dark"
-                            />
-                            <input
-                              value={ex.reps}
-                              onChange={e => updateExerciseField(dayId, index, 'reps', e.target.value)}
-                              placeholder="Repetições"
-                              className="input-dark"
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
-                            <input
-                              value={ex.rest}
-                              onChange={e => updateExerciseField(dayId, index, 'rest', e.target.value)}
-                              placeholder="Descanso (ex: 60s)"
-                              className="input-dark"
-                            />
-                            <div className="hidden sm:block" />
+                          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-2">
+                            <div className="sm:col-span-6 flex flex-col gap-0.5">
+                              <span className="hidden sm:block text-[10px] text-transparent px-0.5 select-none">&nbsp;</span>
+                              <input
+                                value={ex.name}
+                                onChange={e => updateExerciseField(dayId, index, 'name', e.target.value)}
+                                placeholder="Exercício (obrigatório)"
+                                className="input-dark"
+                              />
+                            </div>
+                            <div className="sm:col-span-2 flex flex-col gap-0.5">
+                              <span className="text-[10px] text-jp-gray px-0.5">Séries</span>
+                              <input
+                                type="number"
+                                min="1"
+                                value={ex.sets}
+                                onChange={e => updateExerciseField(dayId, index, 'sets', e.target.value)}
+                                placeholder="3"
+                                className="input-dark"
+                              />
+                            </div>
+                            <div className="sm:col-span-4 flex flex-col gap-0.5">
+                              <span className="text-[10px] text-jp-gray px-0.5">Repetições</span>
+                              <input
+                                value={ex.reps}
+                                onChange={e => updateExerciseField(dayId, index, 'reps', e.target.value)}
+                                placeholder="10-12"
+                                className="input-dark"
+                              />
+                            </div>
                           </div>
 
                           <div className="flex gap-2 items-start">
-                            <textarea
-                              value={ex.notes}
-                              onChange={e => updateExerciseField(dayId, index, 'notes', e.target.value)}
-                              placeholder="Observações/técnica do exercício"
-                              className="input-dark min-h-[42px]"
-                            />
+                            <details className="flex-1 rounded-lg border border-jp-border/70 bg-jp-card/40 px-3 py-2">
+                              <summary className="text-xs text-jp-gray cursor-pointer select-none">Mais opções (opcional)</summary>
+                              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-[10px] text-jp-gray px-0.5">Descanso</span>
+                                  <input
+                                    value={ex.rest}
+                                    onChange={e => updateExerciseField(dayId, index, 'rest', e.target.value)}
+                                    placeholder="ex: 60s"
+                                    className="input-dark"
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-[10px] text-jp-gray px-0.5">Peso (kg)</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    value={ex.weightKg}
+                                    onChange={e => updateExerciseField(dayId, index, 'weightKg', e.target.value)}
+                                    placeholder="Peso (kg)"
+                                    className="input-dark"
+                                  />
+                                </div>
+                              </div>
+                              <textarea
+                                value={ex.notes}
+                                onChange={e => updateExerciseField(dayId, index, 'notes', e.target.value)}
+                                placeholder="Observações/técnica do exercício"
+                                className="input-dark min-h-[42px] mt-2"
+                              />
+                            </details>
                             <button
                               onClick={() => removeExerciseFromDay(dayId, index)}
                               className="p-2 text-jp-gray hover:text-red-400 rounded-lg hover:bg-jp-border transition-colors"
@@ -1533,6 +1714,182 @@ export default function Workouts() {
         </div>
       )}
 
+      {editingWorkout && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setEditingWorkout(null)}>
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+          <div
+            className="relative bg-jp-card border border-blue-400/30 rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto p-4 sm:p-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Pencil size={18} className="text-blue-300" />
+                Editar Treino
+              </h2>
+              <button onClick={() => setEditingWorkout(null)} className="text-jp-gray hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="text-jp-gray text-xs font-semibold uppercase tracking-wider block mb-2">Nome do Treino</label>
+                <input
+                  value={editForm.name}
+                  onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="input-dark"
+                  placeholder="Ex: Upper A"
+                />
+              </div>
+              <div>
+                <label className="text-jp-gray text-xs font-semibold uppercase tracking-wider block mb-2">Emoji</label>
+                <input
+                  value={editForm.emoji}
+                  onChange={e => setEditForm(prev => ({ ...prev, emoji: e.target.value }))}
+                  className="input-dark"
+                  placeholder="💪"
+                />
+              </div>
+              <div>
+                <label className="text-jp-gray text-xs font-semibold uppercase tracking-wider block mb-2">Nível</label>
+                <div className="flex gap-2 flex-wrap">
+                  {LEVELS.map(level => (
+                    <button
+                      key={level}
+                      onClick={() => setEditForm(prev => ({ ...prev, level }))}
+                      className={editForm.level === level ? 'tab-btn-active' : 'tab-btn-inactive'}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-jp-gray text-xs font-semibold uppercase tracking-wider block mb-2">Duração (min)</label>
+                <input
+                  type="number"
+                  min="20"
+                  value={editForm.durationMin}
+                  onChange={e => setEditForm(prev => ({ ...prev, durationMin: e.target.value }))}
+                  className="input-dark"
+                />
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="text-jp-gray text-xs font-semibold uppercase tracking-wider block mb-2">Descrição</label>
+              <textarea
+                value={editForm.description}
+                onChange={e => setEditForm(prev => ({ ...prev, description: e.target.value }))}
+                className="input-dark min-h-[72px]"
+                placeholder="Detalhes do treino"
+              />
+            </div>
+
+            <div className="bg-jp-card-light border border-jp-border rounded-xl p-3 sm:p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-white font-semibold">Exercícios</h3>
+                <button
+                  onClick={addExerciseToEdit}
+                  className="text-jp-orange text-sm hover:underline inline-flex items-center gap-1"
+                >
+                  <Plus size={12} /> Adicionar exercício
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {editForm.exercises.map((exercise, index) => (
+                  <div key={index} className="border border-jp-border rounded-lg p-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 mb-2">
+                      <div className="sm:col-span-2 flex flex-col gap-0.5">
+                        <span className="hidden sm:block text-[10px] text-transparent px-0.5 select-none">&nbsp;</span>
+                        <input
+                          value={exercise.name}
+                          onChange={e => updateEditExerciseField(index, 'name', e.target.value)}
+                          placeholder="Nome do exercício"
+                          className="input-dark"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[10px] text-jp-gray px-0.5">Séries</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={exercise.sets}
+                          onChange={e => updateEditExerciseField(index, 'sets', e.target.value)}
+                          placeholder="3"
+                          className="input-dark"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[10px] text-jp-gray px-0.5">Repetições</span>
+                        <input
+                          value={exercise.reps}
+                          onChange={e => updateEditExerciseField(index, 'reps', e.target.value)}
+                          placeholder="10-12"
+                          className="input-dark"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[10px] text-jp-gray px-0.5">Peso (kg)</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={exercise.weightKg}
+                          onChange={e => updateEditExerciseField(index, 'weightKg', e.target.value)}
+                          placeholder="0"
+                          className="input-dark"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[10px] text-jp-gray px-0.5">Descanso</span>
+                        <input
+                          value={exercise.rest}
+                          onChange={e => updateEditExerciseField(index, 'rest', e.target.value)}
+                          placeholder="ex: 60s"
+                          className="input-dark"
+                        />
+                      </div>
+                      <div className="hidden sm:block" />
+                    </div>
+
+                    <div className="flex gap-2 items-start">
+                      <textarea
+                        value={exercise.notes}
+                        onChange={e => updateEditExerciseField(index, 'notes', e.target.value)}
+                        placeholder="Observações/técnica do exercício"
+                        className="input-dark min-h-[42px]"
+                      />
+                      <button
+                        onClick={() => removeEditExercise(index)}
+                        className="p-2 text-jp-gray hover:text-red-400 rounded-lg hover:bg-jp-border transition-colors"
+                        title="Remover exercício"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <button
+                onClick={handleSaveWorkoutEdit}
+                disabled={editSaving}
+                className="btn-primary w-full sm:w-auto disabled:opacity-40"
+              >
+                {editSaving ? <><LoadingSpinner size="sm" /> Salvando...</> : <><Save size={16} /> Salvar Alterações</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-1.5 mb-4 flex-wrap">
         <button
@@ -1550,146 +1907,6 @@ export default function Workouts() {
           Meus Treinos ({myWorkouts.length})
         </button>
       </div>
-
-      <section className="card p-3 sm:p-3.5 mb-4">
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <h2 className="text-white font-semibold text-base sm:text-lg">Cardio</h2>
-          <div className="flex items-center gap-2">
-            <span className="badge-dark text-[11px] hidden sm:inline-flex">Corrida • Caminhada • Bicicleta</span>
-            <button
-              onClick={() => setCardioExpanded(prev => !prev)}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-jp-border text-jp-gray hover:text-white hover:border-jp-orange/40 transition-colors"
-              aria-label={cardioExpanded ? 'Retrair seção de cardio' : 'Expandir seção de cardio'}
-              title={cardioExpanded ? 'Retrair' : 'Expandir'}
-            >
-              {cardioExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </button>
-          </div>
-        </div>
-
-        {cardioExpanded && (
-        <>
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_280px] gap-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-            <div>
-              <label className="text-jp-gray text-[11px] uppercase tracking-wider font-semibold block mb-1">Tipo</label>
-              <select
-                value={cardioForm.type}
-                onChange={e => setCardioForm(prev => ({ ...prev, type: e.target.value }))}
-                className="input-dark py-2 text-sm"
-              >
-                {CARDIO_TYPES.map(item => (
-                  <option key={item.id} value={item.id}>{item.emoji} {item.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-jp-gray text-[11px] uppercase tracking-wider font-semibold block mb-1">Tempo (min)</label>
-              <input
-                type="number"
-                min="1"
-                value={cardioForm.durationMin}
-                onChange={e => setCardioForm(prev => ({ ...prev, durationMin: e.target.value }))}
-                className="input-dark py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-jp-gray text-[11px] uppercase tracking-wider font-semibold block mb-1">Distância (km)</label>
-              <input
-                type="number"
-                min="0.1"
-                step="0.1"
-                value={cardioForm.distanceKm}
-                onChange={e => setCardioForm(prev => ({ ...prev, distanceKm: e.target.value }))}
-                className="input-dark py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-jp-gray text-[11px] uppercase tracking-wider font-semibold block mb-1">Peso (kg)</label>
-              <input
-                type="number"
-                min="25"
-                step="0.1"
-                value={cardioForm.weightKg}
-                onChange={e => setCardioForm(prev => ({ ...prev, weightKg: e.target.value }))}
-                className="input-dark py-2 text-sm"
-              />
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-jp-border bg-jp-card-light p-2.5">
-            <p className="text-[11px] text-jp-gray uppercase tracking-wider font-semibold">Estimativa estilo esteira</p>
-            {(() => {
-              const preview = estimateCardioCalories(cardioForm.type, cardioForm.durationMin, cardioForm.distanceKm, cardioForm.weightKg)
-              return (
-                <div className="mt-2 space-y-1 text-sm">
-                  <p className="text-white font-semibold">{Math.round(preview.calories || 0)} kcal</p>
-                  <p className="text-jp-gray">Velocidade: {preview.speedKmh > 0 ? `${preview.speedKmh.toFixed(1)} km/h` : '—'}</p>
-                  <p className="text-jp-gray">Ritmo: {preview.paceMinKm > 0 ? `${preview.paceMinKm.toFixed(1)} min/km` : '—'}</p>
-                </div>
-              )
-            })()}
-            <button
-              onClick={handleSaveCardio}
-              disabled={cardioSaving}
-              className="mt-2.5 w-full inline-flex items-center justify-center gap-1.5 h-8 px-2 rounded-lg bg-jp-orange hover:bg-jp-orange-dark text-white text-[12px] font-medium transition-colors disabled:opacity-50"
-            >
-              {cardioSaving ? <><LoadingSpinner size="sm" /> Salvando...</> : <><Save size={12} /> Registrar cardio</>}
-            </button>
-          </div>
-        </div>
-
-        {cardioFeedback && (
-          <div className="mt-2 text-xs text-jp-gray">
-            Último registro: {cardioFeedback.calories} kcal • {cardioFeedback.speedKmh.toFixed(1)} km/h • {cardioFeedback.paceMinKm.toFixed(1)} min/km
-          </div>
-        )}
-
-        <div className="mt-3 pt-2.5 border-t border-jp-border">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2.5">
-            <div className="rounded-lg border border-jp-border bg-jp-card-light p-2">
-              <p className="text-[11px] text-jp-gray">Sessões cardio</p>
-              <p className="text-white font-semibold text-base leading-tight">{cardioPanel.totalSessions}</p>
-            </div>
-            <div className="rounded-lg border border-jp-border bg-jp-card-light p-2">
-              <p className="text-[11px] text-jp-gray">Distância total</p>
-              <p className="text-white font-semibold text-base leading-tight">{cardioPanel.totalDistanceKm.toFixed(1)} km</p>
-            </div>
-            <div className="rounded-lg border border-jp-border bg-jp-card-light p-2">
-              <p className="text-[11px] text-jp-gray">Tempo total</p>
-              <p className="text-white font-semibold text-base leading-tight">{Math.round(cardioPanel.totalDurationMin)} min</p>
-            </div>
-            <div className="rounded-lg border border-jp-border bg-jp-card-light p-2">
-              <p className="text-[11px] text-jp-gray">Calorias</p>
-              <p className="text-white font-semibold text-base leading-tight">{Math.round(cardioPanel.totalCalories)} kcal</p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-1.5 text-xs">
-            <span className="badge-dark">Corrida: {cardioPanel.byType.run || 0}</span>
-            <span className="badge-dark">Caminhada: {cardioPanel.byType.walk || 0}</span>
-            <span className="badge-dark">Bicicleta: {cardioPanel.byType.bike || 0}</span>
-          </div>
-
-          <div className="mt-2 space-y-1.5">
-            <p className="text-jp-gray text-[11px] uppercase tracking-wider font-semibold">Últimos cardios</p>
-            {logsLoading ? (
-              <div className="py-2"><LoadingSpinner size="sm" /></div>
-            ) : cardioPanel.recent.length === 0 ? (
-              <p className="text-jp-gray text-xs">Sem registros de cardio ainda.</p>
-            ) : (
-              cardioPanel.recent.map(item => (
-                <div key={item.id} className="rounded-lg border border-jp-border bg-jp-card-light px-2 py-1.5">
-                  <p className="text-white text-xs font-medium">{item.name}</p>
-                  <p className="text-jp-gray text-[11px] mt-0.5">{item.when} • {item.distanceKm.toFixed(1)} km • {item.durationMin} min • {Math.round(item.calories)} kcal</p>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-        </>
-        )}
-      </section>
 
       {/* Templates */}
       {activeTab === 'templates' && (
@@ -1713,7 +1930,7 @@ export default function Workouts() {
           <div className="text-center py-16">
             <Dumbbell size={48} className="text-jp-border mx-auto mb-4" />
             <h3 className="text-white font-bold text-lg mb-2">Nenhum treino salvo ainda</h3>
-            <p className="text-jp-gray mb-6">Crie manualmente por sessões semanais, copie um template ou use IA</p>
+            <p className="text-jp-gray mb-6">Crie manualmente por treinos semanais, copie um template ou use IA</p>
             <div className="flex gap-3 justify-center">
               <button onClick={() => setShowManualBuilder(true)} className="btn-secondary">
                 <Plus size={16} />
@@ -1760,9 +1977,10 @@ export default function Workouts() {
                           key={workout.id}
                           workout={{
                             ...workout,
-                            sessionName: workout.sessionName || `Sessão ${idx + 1}`,
+                            sessionName: workout.sessionName || `Treino ${idx + 1}`,
                           }}
                           onStart={handleStartWorkout}
+                          onEdit={handleOpenEditWorkout}
                           onDelete={handleDeleteMyWorkout}
                         />
                       ))}

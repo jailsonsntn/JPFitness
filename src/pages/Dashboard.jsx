@@ -362,7 +362,7 @@ export default function Dashboard() {
   const firstName = profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'Atleta'
 
   return (
-    <div className="page-container pt-24">
+    <div className="page-container">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
@@ -544,11 +544,11 @@ export default function Dashboard() {
             ) : (
               <ResponsiveContainer width="100%" height={140}>
                 <LineChart data={cardioSummary.trend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1A1A1A" />
                   <XAxis dataKey="date" tick={{ fill: '#A0A0A0', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: '#A0A0A0', fontSize: 11 }} axisLine={false} tickLine={false} width={32} allowDecimals={false} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: '12px', color: '#fff' }}
+                    contentStyle={{ backgroundColor: '#0A0A0A', border: '1px solid #1A1A1A', borderRadius: '12px', color: '#fff' }}
                     labelStyle={{ color: '#FF6200', fontWeight: 'bold' }}
                   />
                   <Line type="monotone" dataKey="calories" name="kcal" stroke="#FF6200" strokeWidth={2.5} dot={{ fill: '#FF6200', r: 2.5 }} />
@@ -599,11 +599,11 @@ export default function Dashboard() {
                     <stop offset="95%" stopColor="#FF6200" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#1A1A1A" />
                 <XAxis dataKey="day" tick={{ fill: '#A0A0A0', fontSize: 12 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#A0A0A0', fontSize: 11 }} axisLine={false} tickLine={false} width={30} allowDecimals={false} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: '12px', color: '#fff' }}
+                  contentStyle={{ backgroundColor: '#0A0A0A', border: '1px solid #1A1A1A', borderRadius: '12px', color: '#fff' }}
                   labelStyle={{ color: '#FF6200', fontWeight: 'bold' }}
                 />
                 <Area type="monotone" dataKey="workouts" name="Treinos" stroke="#FF6200" fill="url(#calGradient)" strokeWidth={2} dot={{ fill: '#FF6200', r: 4 }} />
@@ -657,11 +657,11 @@ export default function Dashboard() {
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={loadHistory}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#1A1A1A" />
                 <XAxis dataKey="date" tick={{ fill: '#A0A0A0', fontSize: 12 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#A0A0A0', fontSize: 11 }} axisLine={false} tickLine={false} width={40} allowDecimals={false} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: '12px', color: '#fff' }}
+                  contentStyle={{ backgroundColor: '#0A0A0A', border: '1px solid #1A1A1A', borderRadius: '12px', color: '#fff' }}
                   labelStyle={{ color: '#FF6200', fontWeight: 'bold' }}
                 />
                 <Line type="monotone" dataKey="maxWeight" name="Carga máxima (kg)" stroke="#FF6200" strokeWidth={3} dot={{ fill: '#FF6200', r: 3 }} />

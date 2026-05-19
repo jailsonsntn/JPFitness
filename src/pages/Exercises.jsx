@@ -379,7 +379,7 @@ export default function Exercises() {
   }, [displayExercises, translatedNames])
 
   return (
-    <div className="page-container pt-24">
+    <div className="page-container">
       {selectedExercise && (
         <ExerciseModal exercise={selectedExercise} onClose={() => setSelectedExercise(null)} />
       )}

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   Dumbbell, LayoutDashboard, BookOpen, Bot, Menu, X,
-  User, LogOut, Settings, ChevronDown
+  User, LogOut, Settings, ChevronDown, Heart
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { signOut } from '../services/dbService'
@@ -11,6 +11,7 @@ const navLinks = [
   { to: '/dashboard', label: 'Painel', icon: LayoutDashboard },
   { to: '/exercises', label: 'Exercícios', icon: BookOpen },
   { to: '/workouts', label: 'Treinos', icon: Dumbbell },
+  { to: '/cardio', label: 'Cardio', icon: Heart },
   { to: '/ai-trainer', label: 'Treinador IA', icon: Bot },
 ]
 
