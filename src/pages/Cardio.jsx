@@ -130,7 +130,7 @@ export default function Cardio() {
     const avgHR = Number(cardioForm.avgHR || 0)
     const effort = Number(cardioForm.effort || 5)
 
-    if (durationMin <= 0 || distance <= 0 || userWeight <= 0) {
+    if (durationMin <= 0 || userWeight <= 0) {
       return null
     }
 
@@ -154,8 +154,8 @@ export default function Cardio() {
       calories = Math.round(met * 3.5 * userWeight / 200 * durationMin)
     }
 
-    const speedKmh = distance / (durationMin / 60)
-    const paceMinKm = durationMin / distance
+    const speedKmh = distance > 0 ? distance / (durationMin / 60) : 0
+    const paceMinKm = distance > 0 ? durationMin / distance : 0
 
     return { calories, speedKmh, paceMinKm, distance, durationMin }
   }, [cardioForm, userWeight, maxHR, restingHR, userAge, userSex])
@@ -288,13 +288,13 @@ export default function Cardio() {
     const distanceKm = Number(cardioForm.distanceKm || 0)
     const avgHR = Number(cardioForm.avgHR || 0)
 
-    if (durationMin <= 0 || distanceKm <= 0) {
-      alert('Preencha tempo e distância com valores válidos.')
+    if (durationMin <= 0) {
+      alert('Informe pelo menos o tempo de duração.')
       return
     }
 
-    if (avgHR <= 0 || avgHR > maxHR + 20) {
-      alert('FC média deve estar entre 0 e ' + (maxHR + 20))
+    if (avgHR > 0 && avgHR > maxHR + 20) {
+      alert('FC média parece muito alta. Verifique o valor.')
       return
     }
 
@@ -449,13 +449,14 @@ export default function Cardio() {
             />
           </div>
           <div>
-            <label className="text-jp-gray text-[11px] uppercase tracking-wider font-semibold block mb-2">Distância (km)</label>
+            <label className="text-jp-gray text-[11px] uppercase tracking-wider font-semibold block mb-2">Distância (km) <span className="normal-case font-normal text-jp-gray/60">— opcional</span></label>
             <input
               type="number"
-              min="0.1"
+              min="0"
               step="0.1"
               value={cardioForm.distanceKm}
               onChange={e => setCardioForm(prev => ({ ...prev, distanceKm: e.target.value }))}
+              placeholder="0"
               className="input-dark py-3 text-sm"
             />
           </div>
@@ -463,10 +464,13 @@ export default function Cardio() {
 
         {/* Frequência Cardíaca */}
         <div className="mb-4 p-3 rounded-lg border border-jp-border bg-jp-card-light">
-          <p className="text-white font-semibold text-sm mb-3 flex items-center gap-2">
-            <Heart size={16} className="text-jp-orange" />
-            Frequência Cardíaca
-          </p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-white font-semibold text-sm flex items-center gap-2">
+              <Heart size={16} className="text-jp-orange" />
+              Frequência Cardíaca
+            </p>
+            <span className="text-[10px] text-jp-gray border border-jp-border rounded px-1.5 py-0.5">opcional</span>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div>
               <label className="text-jp-gray text-[11px] uppercase tracking-wider font-semibold block mb-2">FC Repouso (bpm)</label>
@@ -492,7 +496,7 @@ export default function Cardio() {
               />
             </div>
             <div>
-              <label className="text-jp-gray text-[11px] uppercase tracking-wider font-semibold block mb-2">FC Média *</label>
+              <label className="text-jp-gray text-[11px] uppercase tracking-wider font-semibold block mb-2">FC Média</label>
               <input
                 type="number"
                 min="60"
@@ -606,18 +610,18 @@ export default function Cardio() {
               </div>
               <div>
                 <p className="text-jp-gray text-xs mb-1">Velocidade</p>
-                <p className="text-white font-semibold text-xl">{caloriesInfo.speedKmh.toFixed(1)}</p>
+                <p className="text-white font-semibold text-xl">{caloriesInfo.speedKmh > 0 ? caloriesInfo.speedKmh.toFixed(1) : '—'}</p>
                 <p className="text-jp-gray text-[10px]">km/h</p>
               </div>
               <div>
                 <p className="text-jp-gray text-xs mb-1">Ritmo</p>
-                <p className="text-white font-semibold text-xl">{caloriesInfo.paceMinKm.toFixed(1)}</p>
+                <p className="text-white font-semibold text-xl">{caloriesInfo.paceMinKm > 0 ? caloriesInfo.paceMinKm.toFixed(1) : '—'}</p>
                 <p className="text-jp-gray text-[10px]">min/km</p>
               </div>
               <div className="flex flex-col justify-end">
                 <button
                   onClick={handleSaveCardio}
-                  disabled={cardioSaving || !cardioForm.avgHR}
+                  disabled={cardioSaving}
                   className="h-10 inline-flex items-center justify-center gap-1.5 px-3 rounded-lg bg-jp-orange hover:bg-jp-orange-dark text-white text-xs font-semibold transition-colors disabled:opacity-50"
                 >
                   {cardioSaving ? <><LoadingSpinner size="sm" /> Salvando...</> : <><Save size={14} /> Registrar</>}
