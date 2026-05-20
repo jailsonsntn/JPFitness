@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   Plus, Trash2, Play, Clock, Dumbbell, ChevronDown, ChevronUp,
-  Zap, Copy, Star, CheckCircle2, X, Save, Pencil
+  Zap, Copy, Star, CheckCircle2, X, Save, Pencil, TrendingUp
 } from 'lucide-react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { generateWorkoutPlan } from '../services/groqApi'
 import { supabase } from '../services/supabase'
 import { useAuth } from '../context/AuthContext'
-import { getWorkouts, createWorkout, updateWorkout, deleteWorkout, createWorkoutLog, getWorkoutLogs, parseWorkoutLogMeta } from '../services/dbService'
+import { getWorkouts, createWorkout, updateWorkout, deleteWorkout, createWorkoutLog, getWorkoutLogs, parseWorkoutLogMeta, updateExerciseWeights } from '../services/dbService'
 
 const EXERCISE_META_PREFIX = '__JPFITNESS_META__'
 
@@ -428,6 +428,114 @@ function estimateCardioCalories(type, durationMin, distanceKm, weightKg) {
   return { calories, met, speedKmh, paceMinKm }
 }
 
+function LoadProgressionHistory({ logs, logsLoading }) {
+  const strengthLogs = useMemo(() =>
+    (logs || []).filter(log => {
+      if (!log.workout_log_sets?.length) return false
+      const { meta } = parseWorkoutLogMeta(log?.notes)
+      return meta?.sessionType !== 'cardio' && !String(log?.name || '').toLowerCase().startsWith('cardio:')
+    }), [logs])
+
+  const exerciseHistory = useMemo(() => {
+    const map = new Map()
+    strengthLogs.forEach(log => {
+      const sets = log.workout_log_sets || []
+      const date = log.started_at ? new Date(log.started_at) : null
+      if (!date) return
+      const dateStr = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+      const byExercise = {}
+      sets.forEach(s => {
+        const name = s.exercise_name
+        if (!name) return
+        const w = Number(s.weight_kg || 0)
+        const r = Number(s.reps_completed || 0)
+        if (!byExercise[name]) byExercise[name] = { maxWeight: 0, totalVolume: 0 }
+        if (w > byExercise[name].maxWeight) byExercise[name].maxWeight = w
+        byExercise[name].totalVolume += w * r
+      })
+      Object.entries(byExercise).forEach(([name, data]) => {
+        if (!map.has(name)) map.set(name, [])
+        map.get(name).push({ date, dateStr, maxWeight: data.maxWeight, totalVolume: Math.round(data.totalVolume), workoutName: log.name })
+      })
+    })
+    map.forEach((entries, name) => {
+      map.set(name, entries.sort((a, b) => b.date - a.date).slice(0, 6))
+    })
+    return Array.from(map.entries())
+      .filter(([, entries]) => entries.some(e => e.maxWeight > 0))
+      .sort((a, b) => a[0].localeCompare(b[0]))
+  }, [strengthLogs])
+
+  if (logsLoading) {
+    return <div className="py-16 flex justify-center"><LoadingSpinner text="Carregando histórico..." /></div>
+  }
+
+  if (!exerciseHistory.length) {
+    return (
+      <div className="text-center py-16">
+        <TrendingUp size={48} className="text-jp-border mx-auto mb-4" />
+        <h3 className="text-white font-bold text-lg mb-2">Nenhum dado de progressão ainda</h3>
+        <p className="text-jp-gray text-sm">Complete treinos com pesos registrados para visualizar sua evolução aqui.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-jp-gray text-[13px]">
+        Histórico das últimas sessões por exercício • {exerciseHistory.length} exercício(s) rastreado(s)
+      </p>
+      {exerciseHistory.map(([exerciseName, entries]) => {
+        const latest = entries[0]?.maxWeight || 0
+        const previous = entries[1]?.maxWeight || 0
+        const diff = latest > 0 && previous > 0 ? latest - previous : 0
+        const isNew = latest > 0 && previous === 0
+
+        return (
+          <div key={exerciseName} className="card p-3 sm:p-4">
+            <div className="flex items-start justify-between gap-2 mb-2.5">
+              <h4 className="text-white font-semibold text-sm leading-tight">{exerciseName}</h4>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {latest > 0 && (
+                  <span className="text-jp-orange font-bold text-sm">{latest.toFixed(1)} kg</span>
+                )}
+                {diff > 0 && (
+                  <span className="text-green-400 text-xs font-semibold bg-green-400/10 px-1.5 py-0.5 rounded-md">
+                    +{diff.toFixed(1)} kg ↑
+                  </span>
+                )}
+                {diff < 0 && (
+                  <span className="text-red-400 text-xs font-semibold bg-red-400/10 px-1.5 py-0.5 rounded-md">
+                    {diff.toFixed(1)} kg ↓
+                  </span>
+                )}
+                {isNew && (
+                  <span className="text-blue-300 text-xs font-semibold bg-blue-400/10 px-1.5 py-0.5 rounded-md">Novo</span>
+                )}
+              </div>
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              {entries.map((entry, i) => (
+                <div
+                  key={i}
+                  className={`rounded-lg border px-2 py-1 text-xs flex flex-col items-center min-w-[52px] ${
+                    i === 0 ? 'border-jp-orange/40 bg-jp-orange/10' : 'border-jp-border bg-jp-card-light'
+                  }`}
+                >
+                  <span className="text-jp-gray leading-none mb-0.5">{entry.dateStr}</span>
+                  <span className={`font-semibold leading-none ${i === 0 ? 'text-jp-orange' : entry.maxWeight > 0 ? 'text-white' : 'text-jp-gray'}`}>
+                    {entry.maxWeight > 0 ? `${entry.maxWeight.toFixed(1)}kg` : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function WorkoutCard({ workout, onStart, onDelete, onCopy, onEdit }) {
   const [expanded, setExpanded] = useState(false)
   const displayName = workout.sessionName || workout.name
@@ -563,11 +671,36 @@ function WorkoutCard({ workout, onStart, onDelete, onCopy, onEdit }) {
   )
 }
 
-function ActiveWorkout({ workout, onFinish, onBack }) {
+function ActiveWorkout({ workout, lastLog, onFinish, onBack }) {
   const [completedSets, setCompletedSets] = useState({})
-  const [setDetails, setSetDetails] = useState({})
+  const [setDetails, setSetDetails] = useState(() => {
+    const initial = {}
+    workout.exercises.forEach((ex, exIndex) => {
+      const w = String(ex.weightKg || '')
+      if (w && Number(w) > 0) {
+        for (let si = 0; si < ex.sets; si++) {
+          initial[`${exIndex}-${si}`] = { weightKg: w }
+        }
+      }
+    })
+    return initial
+  })
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [startTime] = useState(Date.now())
+
+  const lastWeightsByExercise = useMemo(() => {
+    if (!lastLog?.workout_log_sets?.length) return {}
+    const map = {}
+    lastLog.workout_log_sets.forEach(s => {
+      const w = Number(s.weight_kg || 0)
+      if (w > 0 && s.exercise_name) {
+        if (!map[s.exercise_name] || w > map[s.exercise_name]) {
+          map[s.exercise_name] = w
+        }
+      }
+    })
+    return map
+  }, [lastLog])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -720,6 +853,12 @@ function ActiveWorkout({ workout, onFinish, onBack }) {
                     <h3 className="text-white font-semibold text-base sm:text-base leading-tight">{ex.name}</h3>
                     <div className="flex items-center gap-3 flex-wrap">
                       <p className="text-jp-gray text-xs sm:text-sm">{ex.reps} repetições • Descanso: {ex.rest}</p>
+                      {lastWeightsByExercise[ex.name] > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-blue-300 font-medium bg-blue-400/10 px-1.5 py-0.5 rounded-md border border-blue-400/20">
+                          <TrendingUp size={10} />
+                          Anterior: {lastWeightsByExercise[ex.name].toFixed(1)} kg
+                        </span>
+                      )}
                       <a
                         href={`https://www.youtube.com/results?search_query=${encodeURIComponent(ex.name + ' como fazer exercício')}`}
                         target="_blank"
@@ -789,6 +928,7 @@ export default function Workouts() {
   const [activeTab, setActiveTab] = useState('templates')
   const [myWorkouts, setMyWorkouts] = useState([])
   const [activeWorkout, setActiveWorkout] = useState(null)
+  const [activeWorkoutLastLog, setActiveWorkoutLastLog] = useState(null)
   const [workoutsLoading, setWorkoutsLoading] = useState(false)
   const [showAIGenerator, setShowAIGenerator] = useState(false)
   const [showManualBuilder, setShowManualBuilder] = useState(false)
@@ -1061,6 +1201,10 @@ export default function Workouts() {
   }
 
   const handleStartWorkout = (workout) => {
+    const lastLog = workoutLogs.find(log =>
+      log.workout_id === workout.id && (log.workout_log_sets?.length > 0)
+    ) || null
+    setActiveWorkoutLastLog(lastLog)
     setActiveWorkout(workout)
   }
 
@@ -1090,6 +1234,24 @@ export default function Workouts() {
       }).catch(console.error)
     }
     setActiveWorkout(null)
+    // Gravar maior peso usado de volta nos exercícios do treino para pré-preencher na próxima sessão
+    if (activeWorkout?.id && sessionMeta?.sets?.length) {
+      const maxWeightByExercise = {}
+      sessionMeta.sets.forEach(s => {
+        const w = Number(s.weight_kg || 0)
+        if (w > 0 && s.exercise_name) {
+          if (!maxWeightByExercise[s.exercise_name] || w > maxWeightByExercise[s.exercise_name]) {
+            maxWeightByExercise[s.exercise_name] = w
+          }
+        }
+      })
+      if (Object.keys(maxWeightByExercise).length > 0) {
+        updateExerciseWeights(activeWorkout.id, maxWeightByExercise)
+          .then(() => loadWorkouts())
+          .catch(console.error)
+      }
+    }
+    setActiveWorkoutLastLog(null)
     alert('✅ Treino concluído! Parabéns! 💪')
   }
 
@@ -1382,7 +1544,7 @@ export default function Workouts() {
   }
 
   if (activeWorkout) {
-    return <ActiveWorkout workout={activeWorkout} onFinish={handleFinishWorkout} onBack={handleBackFromWorkout} />
+    return <ActiveWorkout workout={activeWorkout} lastLog={activeWorkoutLastLog} onFinish={handleFinishWorkout} onBack={handleBackFromWorkout} />
   }
 
   return (
@@ -1906,6 +2068,13 @@ export default function Workouts() {
           <Dumbbell size={14} className="inline mr-1" />
           Meus Treinos ({myWorkouts.length})
         </button>
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`${activeTab === 'history' ? 'tab-btn-active' : 'tab-btn-inactive'} py-1.5 text-[12px] sm:text-[13px]`}
+        >
+          <TrendingUp size={14} className="inline mr-1" />
+          Progressão de Cargas
+        </button>
       </div>
 
       {/* Templates */}
@@ -1991,6 +2160,11 @@ export default function Workouts() {
             })}
           </div>
         )
+      )}
+
+      {/* Load progression history */}
+      {activeTab === 'history' && (
+        <LoadProgressionHistory logs={workoutLogs} logsLoading={logsLoading} />
       )}
     </div>
   )
