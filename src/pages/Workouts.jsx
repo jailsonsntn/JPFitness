@@ -10,6 +10,26 @@ import { useAuth } from '../context/AuthContext'
 import { getWorkouts, createWorkout, updateWorkout, deleteWorkout, createWorkoutLog, getWorkoutLogs, parseWorkoutLogMeta, updateExerciseWeights } from '../services/dbService'
 
 const EXERCISE_META_PREFIX = '__JPFITNESS_META__'
+const SESSION_KEY = 'jpfitness_session_v1'
+
+function readSavedSession() {
+  try {
+    return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null') || null
+  } catch {
+    return null
+  }
+}
+
+function writeSavedSession(patch) {
+  try {
+    const prev = readSavedSession() || {}
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...prev, ...patch }))
+  } catch {}
+}
+
+function clearSavedSession() {
+  try { localStorage.removeItem(SESSION_KEY) } catch {}
+}
 
 const TEMPLATES = [
   {
@@ -672,8 +692,18 @@ function WorkoutCard({ workout, onStart, onDelete, onCopy, onEdit }) {
 }
 
 function ActiveWorkout({ workout, lastLog, onFinish, onBack }) {
-  const [completedSets, setCompletedSets] = useState({})
+  const [completedSets, setCompletedSets] = useState(() => {
+    const saved = readSavedSession()
+    if (saved?.workout && (saved.workout.id === workout.id || saved.workout.name === workout.name)) {
+      return saved.completedSets || {}
+    }
+    return {}
+  })
   const [setDetails, setSetDetails] = useState(() => {
+    const saved = readSavedSession()
+    if (saved?.workout && (saved.workout.id === workout.id || saved.workout.name === workout.name) && saved.setDetails) {
+      return saved.setDetails
+    }
     const initial = {}
     workout.exercises.forEach((ex, exIndex) => {
       const w = String(ex.weightKg || '')
@@ -686,7 +716,13 @@ function ActiveWorkout({ workout, lastLog, onFinish, onBack }) {
     return initial
   })
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
-  const [startTime] = useState(Date.now())
+  const [startTime] = useState(() => {
+    const saved = readSavedSession()
+    if (saved?.workout && (saved.workout.id === workout.id || saved.workout.name === workout.name) && saved.startTime) {
+      return saved.startTime
+    }
+    return Date.now()
+  })
 
   const lastWeightsByExercise = useMemo(() => {
     if (!lastLog?.workout_log_sets?.length) return {}
@@ -701,6 +737,10 @@ function ActiveWorkout({ workout, lastLog, onFinish, onBack }) {
     })
     return map
   }, [lastLog])
+
+  useEffect(() => {
+    writeSavedSession({ completedSets, setDetails })
+  }, [completedSets, setDetails])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -795,14 +835,14 @@ function ActiveWorkout({ workout, lastLog, onFinish, onBack }) {
               Voltar
             </button>
             <button
-              onClick={() => onFinish(elapsedSeconds, {
+              onClick={() => { clearSavedSession(); onFinish(elapsedSeconds, {
                 sets: performedSets,
                 completedSets: completedCount,
                 totalSets,
                 completionRate: totalSets ? Math.round((completedCount / totalSets) * 100) : 0,
                 sessionLoad: Math.round(totalVolume * 100) / 100,
                 maxWeightKg: maxWeight,
-              })}
+              }) }}
               className="w-full inline-flex items-center justify-center gap-1.5 h-8 px-2 rounded-lg bg-jp-orange hover:bg-jp-orange-dark text-white text-[12px] font-medium transition-colors"
             >
               <CheckCircle2 size={13} />
@@ -927,8 +967,14 @@ export default function Workouts() {
   const { user, profile, loading: authLoading } = useAuth()
   const [activeTab, setActiveTab] = useState('templates')
   const [myWorkouts, setMyWorkouts] = useState([])
-  const [activeWorkout, setActiveWorkout] = useState(null)
-  const [activeWorkoutLastLog, setActiveWorkoutLastLog] = useState(null)
+  const [activeWorkout, setActiveWorkout] = useState(() => {
+    const saved = readSavedSession()
+    return saved?.workout || null
+  })
+  const [activeWorkoutLastLog, setActiveWorkoutLastLog] = useState(() => {
+    const saved = readSavedSession()
+    return saved?.lastLog || null
+  })
   const [workoutsLoading, setWorkoutsLoading] = useState(false)
   const [showAIGenerator, setShowAIGenerator] = useState(false)
   const [showManualBuilder, setShowManualBuilder] = useState(false)
@@ -1204,6 +1250,8 @@ export default function Workouts() {
     const lastLog = workoutLogs.find(log =>
       log.workout_id === workout.id && (log.workout_log_sets?.length > 0)
     ) || null
+    clearSavedSession()
+    writeSavedSession({ workout, lastLog, startTime: Date.now(), completedSets: {}, setDetails: {} })
     setActiveWorkoutLastLog(lastLog)
     setActiveWorkout(workout)
   }
@@ -1233,6 +1281,7 @@ export default function Workouts() {
         },
       }).catch(console.error)
     }
+    clearSavedSession()
     setActiveWorkout(null)
     // Gravar maior peso usado de volta nos exercícios do treino para pré-preencher na próxima sessão
     if (activeWorkout?.id && sessionMeta?.sets?.length) {
@@ -1257,7 +1306,10 @@ export default function Workouts() {
 
   const handleBackFromWorkout = () => {
     const leave = window.confirm('Deseja voltar sem finalizar este treino agora?')
-    if (leave) setActiveWorkout(null)
+    if (leave) {
+      clearSavedSession()
+      setActiveWorkout(null)
+    }
   }
 
   const handleDeleteMyWorkout = async (id) => {
