@@ -5,7 +5,7 @@ import {
   Users, Dumbbell, TrendingUp, ChevronRight, Shield, Clock
 } from 'lucide-react'
 
-const APK_DOWNLOAD_URL = 'https://github.com/jailsonsntn/JPFitness/releases/latest/download/JPFitness-debug.apk'
+const APK_DOWNLOAD_URL = 'https://github.com/jailsonsntn/JPFitness/releases/download/v1.0/JPFitness-debug.apk'
 
 const stats = [
   { value: 500, suffix: '+', label: 'Exercícios' },
