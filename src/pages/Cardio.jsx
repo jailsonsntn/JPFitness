@@ -3,6 +3,7 @@ import { Clock, Save, Heart, Activity, TrendingUp, AlertCircle, BarChart3 } from
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { useAuth } from '../context/AuthContext'
+import { usePersistedState } from '../hooks/usePersistedState'
 import { createWorkoutLog, getWorkoutLogs, parseWorkoutLogMeta } from '../services/dbService'
 
 const CARDIO_TYPES = [
@@ -72,7 +73,7 @@ function estimateMetFromType(type, intensity = 'moderate') {
 
 export default function Cardio() {
   const { user, profile } = useAuth()
-  const [cardioForm, setCardioForm] = useState({
+  const [cardioForm, setCardioForm] = usePersistedState('jpfitness:draft:cardio-form', {
     type: 'run',
     durationMin: '30',
     distanceKm: '5',

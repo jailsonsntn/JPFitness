@@ -136,7 +136,7 @@ export default function Auth() {
                   placeholder="Seu nome completo"
                   value={form.fullName}
                   onChange={set('fullName')}
-                  className="input-dark pl-11"
+                  className="input-dark input-with-icon"
                   required
                   autoComplete="name"
                 />
@@ -151,7 +151,7 @@ export default function Auth() {
                 placeholder="seu@email.com"
                 value={form.email}
                 onChange={set('email')}
-                className="input-dark pl-11"
+                className="input-dark input-with-icon"
                 required
                 autoComplete="email"
               />
@@ -165,7 +165,7 @@ export default function Auth() {
                 placeholder={mode === 'register' ? 'Mínimo 6 caracteres' : 'Sua senha'}
                 value={form.password}
                 onChange={set('password')}
-                className="input-dark pl-11 pr-11"
+                className="input-dark input-with-icon input-with-icon-right"
                 required
                 autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
               />

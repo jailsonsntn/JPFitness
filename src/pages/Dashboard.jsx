@@ -11,9 +11,11 @@ import {
 import LoadingSpinner from '../components/LoadingSpinner'
 import { getMotivationalQuote } from '../services/groqApi'
 import { useAuth } from '../context/AuthContext'
+import { usePersistedState } from '../hooks/usePersistedState'
 import {
   getWorkoutLogs, parseWorkoutLogMeta, getWorkouts
 } from '../services/dbService'
+import { estimateStrengthCaloriesByProfile, resolveStrengthDurationSeconds } from '../services/calorieEstimator'
 
 const CARDIO_LABELS = {
   run: 'Corrida',
@@ -155,6 +157,100 @@ function getWeightStatsFromLog(log) {
   }
 }
 
+function getLogCalories(log, profileData) {
+  const { meta } = parseWorkoutLogMeta(log?.notes)
+  const explicitCalories = Number(log?.calories_burned || meta?.estimatedCalories || 0)
+
+  const isCardio = meta?.sessionType === 'cardio' || String(log?.name || '').toLowerCase().startsWith('cardio:')
+  if (isCardio) {
+    const durationSeconds = Number(log?.duration_seconds || meta?.durationSeconds || meta?.durationMin * 60 || 0)
+    if (durationSeconds <= 0) return 0
+
+    if (explicitCalories > 0) return explicitCalories
+
+    const durationMin = durationSeconds / 60
+    const type = meta?.cardioType || 'run'
+    const pace = Number(meta?.paceMinKm || 0)
+    const speed = Number(meta?.speedKmh || 0)
+    const userWeightKg = Number(profileData?.weight_kg || profileData?.weightKg || 70)
+    let met = 5
+
+    if (type === 'run') {
+      if (pace > 0 && pace <= 5) met = 11.5
+      else if (pace > 0 && pace <= 6) met = 10
+      else if (pace > 0 && pace <= 7) met = 8.8
+      else met = 7.5
+    } else if (type === 'walk') {
+      if (pace > 0 && pace <= 8) met = 5
+      else if (pace > 0 && pace <= 9.5) met = 4.3
+      else if (pace > 0 && pace <= 11) met = 3.5
+      else met = 2.8
+    } else if (type === 'bike') {
+      if (speed > 0 && speed < 16) met = 4
+      else if (speed > 0 && speed < 19) met = 6.8
+      else if (speed > 0 && speed < 22) met = 8
+      else met = 10
+    }
+
+    return (met * 3.5 * userWeightKg / 200) * durationMin
+  }
+
+  const durationSeconds = resolveStrengthDurationSeconds({
+    durationSeconds: Number(log?.duration_seconds || 0),
+    sessionMeta: meta || {},
+    workoutName: String(log?.name || ''),
+  })
+  if (durationSeconds <= 0) return Math.max(explicitCalories, 0)
+
+  const logSets = log?.workout_log_sets || []
+  const inferredCompletedSets = logSets.length
+  const inferredSessionLoad = logSets.reduce((sum, set) => {
+    const w = Number(set?.weight_kg || 0)
+    const r = Number(set?.reps_completed || 0)
+    return sum + (w * r)
+  }, 0)
+  const inferredTotalSets = Number(meta?.totalSets || inferredCompletedSets)
+  const mergedMeta = {
+    ...meta,
+    completedSets: Number(meta?.completedSets || inferredCompletedSets),
+    totalSets: inferredTotalSets,
+    sessionLoad: Number(meta?.sessionLoad || log?.session_load || inferredSessionLoad),
+    completionRate: Number(meta?.completionRate || (inferredTotalSets > 0 ? (inferredCompletedSets / inferredTotalSets) * 100 : 0)),
+  }
+
+  const strengthExerciseNames = Array.from(new Set([
+    ...(Array.isArray(meta?.exerciseNames) ? meta.exerciseNames : []),
+    ...logSets.map(set => set?.exercise_name).filter(Boolean),
+  ]))
+
+  const estimatedStrengthCalories = estimateStrengthCaloriesByProfile({
+    durationSeconds,
+    profile: profileData,
+    sessionMeta: mergedMeta,
+    exerciseNames: strengthExerciseNames,
+  }).calories
+
+  if (explicitCalories > 0) return Math.max(explicitCalories, estimatedStrengthCalories)
+  return estimatedStrengthCalories
+}
+
+function getLogDurationMinutes(log) {
+  const { meta } = parseWorkoutLogMeta(log?.notes)
+  const isCardio = meta?.sessionType === 'cardio' || String(log?.name || '').toLowerCase().startsWith('cardio:')
+
+  if (isCardio) {
+    return Math.max(0, Number(meta?.durationMin || (log?.duration_seconds || 0) / 60 || 0))
+  }
+
+  const resolvedSeconds = resolveStrengthDurationSeconds({
+    durationSeconds: Number(log?.duration_seconds || 0),
+    sessionMeta: meta || {},
+    workoutName: String(log?.name || ''),
+  })
+
+  return Math.max(0, resolvedSeconds / 60)
+}
+
 function getSetWeightStats(logs = []) {
   const stats = logs.reduce((acc, log) => {
     const { meta } = parseWorkoutLogMeta(log?.notes)
@@ -199,9 +295,9 @@ export default function Dashboard() {
   const [quoteLoading, setQuoteLoading] = useState(true)
   const [allLogs, setAllLogs] = useState([])
   const [allWorkouts, setAllWorkouts] = useState([])
-  const [period, setPeriod] = useState('week')
-  const [customStart, setCustomStart] = useState(() => toInputDateValue(shiftDays(new Date(), -29)))
-  const [customEnd, setCustomEnd] = useState(() => toInputDateValue(new Date()))
+  const [period, setPeriod] = usePersistedState('jpfitness:draft:dashboard-period', 'week')
+  const [customStart, setCustomStart] = usePersistedState('jpfitness:draft:dashboard-start', () => toInputDateValue(shiftDays(new Date(), -29)))
+  const [customEnd, setCustomEnd] = usePersistedState('jpfitness:draft:dashboard-end', () => toInputDateValue(new Date()))
   const [dataLoading, setDataLoading] = useState(true)
 
   useEffect(() => {
@@ -259,7 +355,7 @@ export default function Dashboard() {
         const label = dt.toLocaleDateString('pt-BR', { month: '2-digit', year: '2-digit' })
         const prev = map.get(key) || { day: label, workouts: 0, minutes: 0 }
         prev.workouts += 1
-        prev.minutes += Math.round(Number(log?.duration_seconds || 0) / 60)
+        prev.minutes += Math.round(getLogDurationMinutes(log))
         map.set(key, prev)
       })
       return Array.from(map.values())
@@ -284,7 +380,7 @@ export default function Dashboard() {
       const idx = map.get(dt.toDateString())
       if (idx === undefined) return
       arr[idx].workouts += 1
-      arr[idx].minutes += Math.round(Number(log?.duration_seconds || 0) / 60)
+      arr[idx].minutes += Math.round(getLogDurationMinutes(log))
     })
 
     return arr.map(({ day, workouts, minutes }) => ({ day, workouts, minutes }))
@@ -386,6 +482,11 @@ export default function Dashboard() {
       .slice(0, 5)
   }, [strengthLogs])
 
+  const workoutCalories = useMemo(
+    () => filteredLogs.reduce((sum, log) => sum + getLogCalories(log, profile || { weight_kg: 70 }), 0),
+    [filteredLogs, profile]
+  )
+
   const panelSummary = useMemo(() => {
     const programs = new Set(allWorkouts.map(w => parseProgramName(w?.name || ''))).size
     const uniqueExercises = new Set(
@@ -401,8 +502,9 @@ export default function Dashboard() {
       sessions: allWorkouts.length,
       uniqueExercises,
       activeDays,
+      caloriesBurned: workoutCalories,
     }
-  }, [allWorkouts, strengthLogs])
+  }, [allWorkouts, strengthLogs, workoutCalories])
 
   const cardioSummary = useMemo(() => {
     const base = cardioLogs.reduce((acc, item) => {
@@ -535,12 +637,13 @@ export default function Dashboard() {
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         {[
           { label: 'Treinos no período', value: dataLoading ? '—' : String(weekWorkouts), icon: Dumbbell, color: 'text-jp-orange', bg: 'bg-jp-orange/10', change: periodLabel },
           { label: 'Sequência atual', value: dataLoading ? '—' : `${streak?.current_streak || 0} dias`, icon: Flame, color: 'text-red-400', bg: 'bg-red-400/10', change: streak?.current_streak >= (streak?.longest_streak || 0) ? '🔥 Recorde pessoal!' : `Melhor: ${streak?.longest_streak || 0} dias` },
           { label: 'Carga máxima média', value: dataLoading ? '—' : `${avgMaxWeight.toFixed(1)} kg`, icon: Target, color: 'text-green-400', bg: 'bg-green-400/10', change: 'média no período' },
           { label: 'Minutos ativos', value: dataLoading ? '—' : String(weekMinutes), icon: Clock, color: 'text-blue-400', bg: 'bg-blue-400/10', change: periodLabel },
+          { label: 'Média de kcal', value: dataLoading ? '—' : `${Math.round(workoutCalories)} kcal`, icon: Zap, color: 'text-yellow-400', bg: 'bg-yellow-400/10', change: `${periodLabel} • estimativa` },
         ].map(({ label, value, icon: Icon, color, bg, change }) => (
           <div key={label} className="card">
             <div className={`w-10 h-10 ${bg} rounded-xl flex items-center justify-center mb-3`}>
@@ -559,7 +662,7 @@ export default function Dashboard() {
           <h2 className="text-lg font-bold text-white">Painel Geral</h2>
           <span className="badge-dark">Visão consolidada</span>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <div className="rounded-xl border border-jp-border bg-jp-card-light p-3">
             <p className="text-jp-gray text-xs">Programas</p>
             <p className="text-white font-semibold text-xl leading-tight">{dataLoading ? '—' : panelSummary.programs}</p>
@@ -575,6 +678,11 @@ export default function Dashboard() {
           <div className="rounded-xl border border-jp-border bg-jp-card-light p-3">
             <p className="text-jp-gray text-xs">Dias ativos (período)</p>
             <p className="text-white font-semibold text-xl leading-tight">{dataLoading ? '—' : panelSummary.activeDays}</p>
+          </div>
+          <div className="rounded-xl border border-jp-border bg-jp-card-light p-3">
+            <p className="text-jp-gray text-xs">Média de kcal</p>
+            <p className="text-white font-semibold text-xl leading-tight">{dataLoading ? '—' : `${Math.round(panelSummary.caloriesBurned)} kcal`}</p>
+            <p className="text-jp-gray text-[11px] mt-1">Valor estimado com base no histórico</p>
           </div>
         </div>
       </div>

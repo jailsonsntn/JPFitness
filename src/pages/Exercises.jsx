@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Search, Filter, ChevronLeft, ChevronRight, X, Dumbbell, Info, Target } from 'lucide-react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { getExercises, getExerciseCategories, searchExercises } from '../services/wgerApi'
+import { usePersistedState } from '../hooks/usePersistedState'
 
 const CATEGORIES = [
   { id: null, name: 'Todos' },
@@ -380,9 +381,9 @@ export default function Exercises() {
   const [loading, setLoading] = useState(true)
   const [searchLoading, setSearchLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [selectedCategory, setSelectedCategory] = useState(null)
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(0)
+  const [selectedCategory, setSelectedCategory] = usePersistedState('jpfitness:draft:exercises-category', null)
+  const [search, setSearch] = usePersistedState('jpfitness:draft:exercises-search', '')
+  const [page, setPage] = usePersistedState('jpfitness:draft:exercises-page', 0)
   const [total, setTotal] = useState(0)
   const [selectedExercise, setSelectedExercise] = useState(null)
   const [searchResults, setSearchResults] = useState(null)

@@ -5,6 +5,8 @@ import {
   Users, Dumbbell, TrendingUp, ChevronRight, Shield, Clock
 } from 'lucide-react'
 
+const APK_DOWNLOAD_URL = 'https://github.com/jailsonsntn/JPFitness/releases/latest/download/JPFitness-debug.apk'
+
 const stats = [
   { value: 500, suffix: '+', label: 'Exercícios' },
   { value: 50, suffix: 'k+', label: 'Treinos Feitos' },
@@ -136,6 +138,14 @@ export default function Home() {
               <Bot size={20} />
               Falar com AI
             </Link>
+            <a
+              href={APK_DOWNLOAD_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="btn-secondary text-lg px-8 py-4"
+            >
+              Baixar APK
+            </a>
           </div>
 
           {/* Trust badges */}

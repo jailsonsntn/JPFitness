@@ -80,6 +80,14 @@
     box-shadow: 0 0 0 3px rgba(255, 98, 0, 0.1);
   }
 
+  .input-with-icon {
+    padding-left: 2.75rem !important;
+  }
+
+  .input-with-icon-right {
+    padding-right: 2.75rem !important;
+  }
+
   .badge {
     @apply text-xs font-medium px-2 py-0.5 rounded-full;
   }

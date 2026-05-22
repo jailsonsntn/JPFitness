@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../services/supabase'
-import { getProfile, getStreak } from '../services/dbService'
+import { getProfile, getStreak, signOut } from '../services/dbService'
+import { hasExceededInactivityTimeout, touchLastActiveAt } from '../services/nativePersistence'
 
 const AuthContext = createContext(null)
 
@@ -24,25 +25,48 @@ export function AuthProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    // Sessão inicial
+    let isMounted = true
+
+    const hydrateSession = async (session) => {
+      if (!isMounted) return
+
+      if (session?.user) {
+        const expired = await hasExceededInactivityTimeout()
+        if (expired) {
+          await signOut().catch(() => {})
+          if (!isMounted) return
+          setUser(null)
+          setProfile(null)
+          setStreak(null)
+          setLoading(false)
+          return
+        }
+
+        setUser(session.user)
+        await touchLastActiveAt()
+        loadUserData(session.user.id)
+      } else {
+        setUser(null)
+        setProfile(null)
+        setStreak(null)
+      }
+
+      if (isMounted) setLoading(false)
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      if (session?.user) loadUserData(session.user.id)
-      setLoading(false)
+      hydrateSession(session)
     })
 
     // Escutar mudanças de auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        loadUserData(session.user.id)
-      } else {
-        setProfile(null)
-        setStreak(null)
-      }
+      hydrateSession(session)
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      isMounted = false
+      subscription.unsubscribe()
+    }
   }, [loadUserData])
 
   const refreshProfile = useCallback(async () => {

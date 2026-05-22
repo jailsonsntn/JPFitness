@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { clearSessionPersistence } from './nativePersistence'
 
 const WORKOUT_LOG_META_PREFIX = '__JPFITNESS_LOG_META__'
 
@@ -52,6 +53,7 @@ export async function signIn({ email, password }) {
 export async function signOut() {
   const { error } = await supabase.auth.signOut()
   if (error) throw error
+  await clearSessionPersistence()
 }
 
 export async function getSession() {

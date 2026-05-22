@@ -7,28 +7,25 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import { generateWorkoutPlan } from '../services/groqApi'
 import { supabase } from '../services/supabase'
 import { useAuth } from '../context/AuthContext'
+import { usePersistedState } from '../hooks/usePersistedState'
 import { getWorkouts, createWorkout, updateWorkout, deleteWorkout, createWorkoutLog, getWorkoutLogs, parseWorkoutLogMeta, updateExerciseWeights, deleteWorkoutLog } from '../services/dbService'
+import { getPersistedJSONSync, removePersistedItem, setPersistedJSON } from '../services/nativePersistence'
+import { estimateStrengthCaloriesByProfile, resolveStrengthDurationSeconds } from '../services/calorieEstimator'
 
 const EXERCISE_META_PREFIX = '__JPFITNESS_META__'
 const SESSION_KEY = 'jpfitness_session_v1'
 
 function readSavedSession() {
-  try {
-    return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null') || null
-  } catch {
-    return null
-  }
+  return getPersistedJSONSync(SESSION_KEY)
 }
 
 function writeSavedSession(patch) {
-  try {
-    const prev = readSavedSession() || {}
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...prev, ...patch }))
-  } catch {}
+  const prev = readSavedSession() || {}
+  setPersistedJSON(SESSION_KEY, { ...prev, ...patch }).catch(() => {})
 }
 
 function clearSavedSession() {
-  try { localStorage.removeItem(SESSION_KEY) } catch {}
+  removePersistedItem(SESSION_KEY).catch(() => {})
 }
 
 const TEMPLATES = [
@@ -996,7 +993,7 @@ function ActiveWorkout({ workout, lastLog, onFinish, onBack }) {
 
 export default function Workouts() {
   const { user, profile, loading: authLoading } = useAuth()
-  const [activeTab, setActiveTab] = useState('templates')
+  const [activeTab, setActiveTab] = usePersistedState('jpfitness:draft:workouts-tab', 'templates')
   const [myWorkouts, setMyWorkouts] = useState([])
   const [activeWorkout, setActiveWorkout] = useState(() => {
     const saved = readSavedSession()
@@ -1007,25 +1004,25 @@ export default function Workouts() {
     return saved?.lastLog || null
   })
   const [workoutsLoading, setWorkoutsLoading] = useState(false)
-  const [showAIGenerator, setShowAIGenerator] = useState(false)
-  const [showManualBuilder, setShowManualBuilder] = useState(false)
+  const [showAIGenerator, setShowAIGenerator] = usePersistedState('jpfitness:draft:workouts-ai-open', false)
+  const [showManualBuilder, setShowManualBuilder] = usePersistedState('jpfitness:draft:workouts-manual-open', false)
   const [manualSaving, setManualSaving] = useState(false)
-  const [manualForm, setManualForm] = useState({
+  const [manualForm, setManualForm] = usePersistedState('jpfitness:draft:workouts-manual-form', {
     name: '',
     style: 'Hipertrofia',
     level: 'Intermediário',
     daysPerWeek: '5',
     byDay: getInitialManualBySession(),
   })
-  const [aiForm, setAiForm] = useState({ level: 'Intermediário', goal: GOALS_LIST[0], days: '3', equipment: EQUIPMENT_OPTIONS[0] })
-  const [aiPlan, setAiPlan] = useState('')
+  const [aiForm, setAiForm] = usePersistedState('jpfitness:draft:workouts-ai-form', { level: 'Intermediário', goal: GOALS_LIST[0], days: '3', equipment: EQUIPMENT_OPTIONS[0] })
+  const [aiPlan, setAiPlan] = usePersistedState('jpfitness:draft:workouts-ai-plan', '')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiSaving, setAiSaving] = useState(false)
-  const [aiPlanName, setAiPlanName] = useState('')
+  const [aiPlanName, setAiPlanName] = usePersistedState('jpfitness:draft:workouts-ai-plan-name', '')
   const [workoutLogs, setWorkoutLogs] = useState([])
   const [logsLoading, setLogsLoading] = useState(false)
   const [cardioSaving, setCardioSaving] = useState(false)
-  const [cardioExpanded, setCardioExpanded] = useState(true)
+  const [cardioExpanded, setCardioExpanded] = usePersistedState('jpfitness:draft:workouts-cardio-expanded', true)
   const [expandedPrograms, setExpandedPrograms] = useState({})
   const [cardioFeedback, setCardioFeedback] = useState(null)
   const [editingWorkout, setEditingWorkout] = useState(null)
@@ -1038,7 +1035,7 @@ export default function Workouts() {
     description: '',
     exercises: [createEditableExercise()],
   })
-  const [cardioForm, setCardioForm] = useState({
+  const [cardioForm, setCardioForm] = usePersistedState('jpfitness:draft:workouts-cardio-form', {
     type: 'run',
     durationMin: '20',
     distanceKm: '3',
@@ -1290,13 +1287,40 @@ export default function Workouts() {
   const handleFinishWorkout = async (durationSeconds, sessionMeta = null) => {
     if (user && activeWorkout) {
       const finishedAt = new Date().toISOString()
+      const parsedDurationMatch = String(activeWorkout?.duration || '').match(/\d+/)
+      const plannedDurationMin = Number(parsedDurationMatch?.[0] || activeWorkout?.estimated_duration_min || 0)
+      const { sessionName } = parseWorkoutIdentity(activeWorkout?.name || '')
+      const resolvedDurationSeconds = resolveStrengthDurationSeconds({
+        durationSeconds,
+        sessionMeta: {
+          ...(sessionMeta || {}),
+          sessionName,
+          workoutName: activeWorkout?.name,
+        },
+        workoutName: activeWorkout?.name,
+        plannedDurationMin,
+      })
+      const resolvedDurationMin = Math.max(1, Math.round(resolvedDurationSeconds / 60))
+      const strengthExerciseNames = Array.from(new Set((sessionMeta?.sets || [])
+        .map(row => row?.exercise_name)
+        .filter(Boolean)))
+      const caloriesCalc = estimateStrengthCaloriesByProfile({
+        durationSeconds: resolvedDurationSeconds,
+        profile: profile || { weight_kg: 70 },
+        sessionMeta: sessionMeta || {},
+        exerciseNames: strengthExerciseNames,
+      })
+      const estimatedCalories = Math.round(
+        caloriesCalc.calories
+      )
       await createWorkoutLog({
         user_id: user.id,
         workout_id: activeWorkout.id || null,
         name: activeWorkout.name,
-        duration_seconds: durationSeconds || 0,
-        started_at: new Date(Date.now() - (durationSeconds || 0) * 1000).toISOString(),
+        duration_seconds: resolvedDurationSeconds,
+        started_at: new Date(Date.now() - resolvedDurationSeconds * 1000).toISOString(),
         finished_at: finishedAt,
+        calories_burned: estimatedCalories,
         sets: sessionMeta?.sets || [],
         load_level: sessionMeta?.maxWeightKg ? Math.min(5, Math.max(1, Math.round(sessionMeta.maxWeightKg / 20))) : null,
         load_label: sessionMeta?.maxWeightKg ? `${sessionMeta.maxWeightKg.toFixed(1)}kg máx` : null,
@@ -1306,6 +1330,17 @@ export default function Workouts() {
         session_load: sessionMeta?.sessionLoad || null,
         logMeta: {
           ...(sessionMeta || {}),
+          estimatedCalories,
+          baseCalories: Math.round(caloriesCalc.baseCalories || 0),
+          metCalories: Math.round(caloriesCalc.metCalories || 0),
+          met: Number((caloriesCalc.met || 0).toFixed(2)),
+          intensityLabel: caloriesCalc.intensityLabel || 'moderado',
+          exerciseNames: strengthExerciseNames,
+          calorieModel: 'unisex-0.0675+met-ai',
+          durationSeconds: resolvedDurationSeconds,
+          durationMin: resolvedDurationMin,
+          durationSource: resolvedDurationSeconds !== Number(durationSeconds || 0) ? 'resolved-fallback' : 'timer',
+          sessionName,
           workoutLevel: activeWorkout.level,
           workoutName: activeWorkout.name,
           finishedAt,

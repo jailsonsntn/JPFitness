@@ -1,0 +1,14 @@
+{
+  "appId": "com.jpfitness.app",
+  "appName": "JPFitness",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "iconColor": "#FF6200"
+    }
+  }
+}

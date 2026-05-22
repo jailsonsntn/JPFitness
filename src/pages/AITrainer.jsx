@@ -6,6 +6,7 @@ import {
 import LoadingSpinner from '../components/LoadingSpinner'
 import { sendChatMessage } from '../services/groqApi'
 import { useAuth } from '../context/AuthContext'
+import { usePersistedState } from '../hooks/usePersistedState'
 import { getChatMessages, saveChatMessage, clearChatMessages } from '../services/dbService'
 
 const SUGGESTED_PROMPTS = [
@@ -112,7 +113,7 @@ export default function AITrainer() {
     time: 'Agora'
   }
   const [messages, setMessages] = useState([INITIAL_MSG])
-  const [input, setInput] = useState('')
+  const [input, setInput] = usePersistedState('jpfitness:draft:ai-input', '')
   const [loading, setLoading] = useState(false)
   const [showScrollDown, setShowScrollDown] = useState(false)
   const messagesEndRef = useRef(null)
