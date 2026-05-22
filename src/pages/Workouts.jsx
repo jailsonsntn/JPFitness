@@ -7,7 +7,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import { generateWorkoutPlan } from '../services/groqApi'
 import { supabase } from '../services/supabase'
 import { useAuth } from '../context/AuthContext'
-import { getWorkouts, createWorkout, updateWorkout, deleteWorkout, createWorkoutLog, getWorkoutLogs, parseWorkoutLogMeta, updateExerciseWeights } from '../services/dbService'
+import { getWorkouts, createWorkout, updateWorkout, deleteWorkout, createWorkoutLog, getWorkoutLogs, parseWorkoutLogMeta, updateExerciseWeights, deleteWorkoutLog } from '../services/dbService'
 
 const EXERCISE_META_PREFIX = '__JPFITNESS_META__'
 const SESSION_KEY = 'jpfitness_session_v1'
@@ -448,7 +448,8 @@ function estimateCardioCalories(type, durationMin, distanceKm, weightKg) {
   return { calories, met, speedKmh, paceMinKm }
 }
 
-function LoadProgressionHistory({ logs, logsLoading }) {
+function LoadProgressionHistory({ logs, logsLoading, onDeleteLog }) {
+  const [editingExercises, setEditingExercises] = useState({})
   const strengthLogs = useMemo(() =>
     (logs || []).filter(log => {
       if (!log.workout_log_sets?.length) return false
@@ -475,7 +476,7 @@ function LoadProgressionHistory({ logs, logsLoading }) {
       })
       Object.entries(byExercise).forEach(([name, data]) => {
         if (!map.has(name)) map.set(name, [])
-        map.get(name).push({ date, dateStr, maxWeight: data.maxWeight, totalVolume: Math.round(data.totalVolume), workoutName: log.name })
+        map.get(name).push({ id: log.id, date, dateStr, maxWeight: data.maxWeight, totalVolume: Math.round(data.totalVolume), workoutName: log.name })
       })
     })
     map.forEach((entries, name) => {
@@ -506,6 +507,7 @@ function LoadProgressionHistory({ logs, logsLoading }) {
         Histórico das últimas sessões por exercício • {exerciseHistory.length} exercício(s) rastreado(s)
       </p>
       {exerciseHistory.map(([exerciseName, entries]) => {
+        const isEditing = Boolean(editingExercises[exerciseName])
         const latest = entries[0]?.maxWeight || 0
         const previous = entries[1]?.maxWeight || 0
         const diff = latest > 0 && previous > 0 ? latest - previous : 0
@@ -513,8 +515,13 @@ function LoadProgressionHistory({ logs, logsLoading }) {
 
         return (
           <div key={exerciseName} className="card p-3 sm:p-4">
-            <div className="flex items-start justify-between gap-2 mb-2.5">
-              <h4 className="text-white font-semibold text-sm leading-tight">{exerciseName}</h4>
+            <div className="relative flex items-start justify-between gap-2 mb-2.5 pr-8">
+              <div className="min-w-0">
+                <h4 className="text-white font-semibold text-sm leading-tight">{exerciseName}</h4>
+                <p className="text-jp-gray text-[11px] mt-0.5">
+                  {isEditing ? 'Modo de edição ativo' : 'Clique no lápis para liberar a exclusão'}
+                </p>
+              </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 {latest > 0 && (
                   <span className="text-jp-orange font-bold text-sm">{latest.toFixed(1)} kg</span>
@@ -533,15 +540,39 @@ function LoadProgressionHistory({ logs, logsLoading }) {
                   <span className="text-blue-300 text-xs font-semibold bg-blue-400/10 px-1.5 py-0.5 rounded-md">Novo</span>
                 )}
               </div>
+              <button
+                type="button"
+                onClick={() => setEditingExercises(prev => ({ ...prev, [exerciseName]: !prev[exerciseName] }))}
+                className={`absolute top-0 right-0 inline-flex items-center justify-center w-6 h-6 rounded-md border transition-colors ${
+                  isEditing
+                    ? 'border-blue-400/40 text-blue-300 bg-blue-400/10'
+                    : 'border-jp-border text-jp-gray hover:text-blue-300 hover:border-blue-400/40 bg-jp-card-light'
+                }`}
+                aria-label={isEditing ? 'Desativar edição' : 'Ativar edição'}
+                title={isEditing ? 'Desativar edição' : 'Ativar edição'}
+              >
+                <Pencil size={10} />
+              </button>
             </div>
             <div className="flex gap-1.5 flex-wrap">
               {entries.map((entry, i) => (
                 <div
                   key={i}
-                  className={`rounded-lg border px-2 py-1 text-xs flex flex-col items-center min-w-[52px] ${
+                  className={`relative rounded-lg border px-2 py-1 text-xs flex flex-col items-center min-w-[52px] ${
                     i === 0 ? 'border-jp-orange/40 bg-jp-orange/10' : 'border-jp-border bg-jp-card-light'
                   }`}
                 >
+                  {isEditing && onDeleteLog && (
+                    <button
+                      type="button"
+                      onClick={() => onDeleteLog(entry.id, exerciseName, entry.dateStr)}
+                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-400 text-white flex items-center justify-center hover:bg-red-300 transition-colors"
+                      title="Excluir essa sessão"
+                      aria-label={`Excluir sessão de ${exerciseName} em ${entry.dateStr}`}
+                    >
+                      <Trash2 size={10} />
+                    </button>
+                  )}
                   <span className="text-jp-gray leading-none mb-0.5">{entry.dateStr}</span>
                   <span className={`font-semibold leading-none ${i === 0 ? 'text-jp-orange' : entry.maxWeight > 0 ? 'text-white' : 'text-jp-gray'}`}>
                     {entry.maxWeight > 0 ? `${entry.maxWeight.toFixed(1)}kg` : '—'}
@@ -1315,6 +1346,20 @@ export default function Workouts() {
   const handleDeleteMyWorkout = async (id) => {
     await deleteWorkout(id).catch(console.error)
     setMyWorkouts(prev => prev.filter(w => w.id !== id))
+  }
+
+  const handleDeleteProgressionLog = async (logId, exerciseName, dateLabel) => {
+    if (!logId) return
+    const confirmed = window.confirm(`Excluir apenas a sessão de ${exerciseName} em ${dateLabel}? Isso removerá somente esse treino registrado e as séries vinculadas a ele.`)
+    if (!confirmed) return
+
+    try {
+      await deleteWorkoutLog(logId)
+      setWorkoutLogs(prev => prev.filter(log => log.id !== logId))
+    } catch (err) {
+      console.error(err)
+      alert('Não foi possível excluir essa progressão agora.')
+    }
   }
 
   const handleOpenEditWorkout = (workout) => {
@@ -2216,7 +2261,7 @@ export default function Workouts() {
 
       {/* Load progression history */}
       {activeTab === 'history' && (
-        <LoadProgressionHistory logs={workoutLogs} logsLoading={logsLoading} />
+        <LoadProgressionHistory logs={workoutLogs} logsLoading={logsLoading} onDeleteLog={handleDeleteProgressionLog} />
       )}
     </div>
   )

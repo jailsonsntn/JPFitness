@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line,
+  LineChart, Line, BarChart, Bar, Cell,
 } from 'recharts'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { getMotivationalQuote } from '../services/groqApi'
@@ -155,6 +155,38 @@ function getWeightStatsFromLog(log) {
   }
 }
 
+function getSetWeightStats(logs = []) {
+  const stats = logs.reduce((acc, log) => {
+    const { meta } = parseWorkoutLogMeta(log?.notes)
+    if (meta?.sessionType === 'cardio' || String(log?.name || '').toLowerCase().startsWith('cardio:')) return acc
+
+    const sets = log?.workout_log_sets || []
+    sets.forEach(set => {
+      const weight = Number(set?.weight_kg || 0)
+      const reps = Number(set?.reps_completed || 0)
+      if (weight <= 0) return
+
+      acc.totalWeight += weight
+      acc.totalVolume += weight * reps
+      acc.totalSets += 1
+      acc.peakWeight = Math.max(acc.peakWeight, weight)
+    })
+
+    return acc
+  }, {
+    totalWeight: 0,
+    totalVolume: 0,
+    totalSets: 0,
+    peakWeight: 0,
+  })
+
+  return {
+    ...stats,
+    averageSetWeight: stats.totalSets > 0 ? stats.totalWeight / stats.totalSets : 0,
+    averageVolumePerSet: stats.totalSets > 0 ? stats.totalVolume / stats.totalSets : 0,
+  }
+}
+
 const quickLinks = [
   { to: '/exercises', label: 'Ver Exercícios', icon: BookOpen, color: 'text-blue-400 bg-blue-400/10' },
   { to: '/workouts', label: 'Meus Treinos', icon: Dumbbell, color: 'text-jp-orange bg-jp-orange/10' },
@@ -278,6 +310,56 @@ export default function Dashboard() {
     [strengthLogs]
   )
 
+  const loadSetStats = useMemo(() => getSetWeightStats(strengthLogs), [strengthLogs])
+
+  const loadTrendData = useMemo(() => {
+    if (!rangeBounds.valid) return []
+    const daysSpan = Math.max(1, Math.round((rangeBounds.end - rangeBounds.start) / 86400000) + 1)
+
+    if (daysSpan > 120) {
+      const map = new Map()
+      strengthLogs.forEach(log => {
+        const dt = log.started_at ? new Date(log.started_at) : null
+        if (!dt || Number.isNaN(dt.getTime())) return
+        const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`
+        const label = dt.toLocaleDateString('pt-BR', { month: '2-digit', year: '2-digit' })
+        const { maxWeight, sessionVolume } = getWeightStatsFromLog(log)
+        const prev = map.get(key) || { day: label, volume: 0, maxWeight: 0 }
+        prev.volume += sessionVolume
+        prev.maxWeight = Math.max(prev.maxWeight, maxWeight)
+        map.set(key, prev)
+      })
+      return Array.from(map.values())
+    }
+
+    const buckets = []
+    const bucketIndex = new Map()
+
+    for (let i = 0; i < daysSpan; i += 1) {
+      const date = shiftDays(rangeBounds.start, i)
+      const key = date.toDateString()
+      buckets.push({
+        key,
+        day: date.toLocaleDateString('pt-BR', daysSpan <= 14 ? { weekday: 'short' } : { day: '2-digit', month: '2-digit' }),
+        volume: 0,
+        maxWeight: 0,
+      })
+      bucketIndex.set(key, buckets.length - 1)
+    }
+
+    strengthLogs.forEach(log => {
+      const dt = log.started_at ? new Date(log.started_at) : null
+      if (!dt || Number.isNaN(dt.getTime())) return
+      const idx = bucketIndex.get(dt.toDateString())
+      if (idx === undefined) return
+      const { maxWeight, sessionVolume } = getWeightStatsFromLog(log)
+      buckets[idx].volume += sessionVolume
+      buckets[idx].maxWeight = Math.max(buckets[idx].maxWeight, maxWeight)
+    })
+
+    return buckets.map(({ day, volume, maxWeight }) => ({ day, volume: Math.round(volume), maxWeight }))
+  }, [rangeBounds, strengthLogs])
+
   const exerciseRecords = useMemo(() => {
     const recordsMap = new Map()
     strengthLogs.forEach(log => {
@@ -357,6 +439,7 @@ export default function Dashboard() {
   const loadTrend = loadHistory.length >= 2
     ? loadHistory[loadHistory.length - 1].maxWeight - loadHistory[0].maxWeight
     : 0
+  const loadSessionsWithWeights = strengthLogs.filter(log => (log.workout_log_sets || []).some(set => Number(set?.weight_kg || 0) > 0)).length
   const periodLabel = formatPeriodLabel(period, rangeBounds.start, rangeBounds.end)
 
   const firstName = profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'Atleta'
@@ -579,7 +662,7 @@ export default function Dashboard() {
       </div>
 
       {/* Charts row */}
-      <div className="grid grid-cols-1 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Weekly activity */}
         <div className="card">
           <div className="flex items-center justify-between mb-6">
@@ -611,6 +694,38 @@ export default function Dashboard() {
             </ResponsiveContainer>
           )}
         </div>
+
+        {/* Weekly load volume */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-bold text-white">Volume de Carga no Período</h2>
+            <span className="badge-dark">kg-reps por faixa</span>
+          </div>
+          {dataLoading ? (
+            <div className="h-44 flex items-center justify-center"><LoadingSpinner /></div>
+          ) : loadTrendData.length === 0 ? (
+            <div className="h-44 flex items-center justify-center text-jp-gray text-sm">Sem volume de carga para o período selecionado.</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={180}>
+              <AreaChart data={loadTrendData}>
+                <defs>
+                  <linearGradient id="loadGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#22C55E" stopOpacity={0.28} />
+                    <stop offset="95%" stopColor="#22C55E" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1A1A1A" />
+                <XAxis dataKey="day" tick={{ fill: '#A0A0A0', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#A0A0A0', fontSize: 11 }} axisLine={false} tickLine={false} width={34} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#0A0A0A', border: '1px solid #1A1A1A', borderRadius: '12px', color: '#fff' }}
+                  formatter={(value, name) => [name === 'volume' ? `${Number(value).toLocaleString('pt-BR')} kg-reps` : `${Number(value).toFixed(1)} kg`, name === 'volume' ? 'Volume' : 'Carga máxima']}
+                />
+                <Area type="monotone" dataKey="volume" name="Volume" stroke="#22C55E" fill="url(#loadGradient)" strokeWidth={2} dot={{ fill: '#22C55E', r: 3 }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -632,6 +747,26 @@ export default function Dashboard() {
               <div className="p-3 rounded-xl bg-jp-card-light border border-jp-border">
                 <p className="text-jp-gray text-xs mb-1">Volume acumulado (período)</p>
                 <p className="text-white text-2xl font-semibold">{Math.round(totalLoad30d)} kg-reps</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-jp-card-light border border-jp-border">
+                  <p className="text-jp-gray text-xs mb-1">Carga pico</p>
+                  <p className="text-white text-lg font-semibold">{loadSetStats.peakWeight > 0 ? `${loadSetStats.peakWeight.toFixed(1)} kg` : '—'}</p>
+                </div>
+                <div className="p-3 rounded-xl bg-jp-card-light border border-jp-border">
+                  <p className="text-jp-gray text-xs mb-1">Séries com peso</p>
+                  <p className="text-white text-lg font-semibold">{loadSetStats.totalSets}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-jp-card-light border border-jp-border">
+                  <p className="text-jp-gray text-xs mb-1">Peso médio por série</p>
+                  <p className="text-white text-lg font-semibold">{loadSetStats.averageSetWeight > 0 ? `${loadSetStats.averageSetWeight.toFixed(1)} kg` : '—'}</p>
+                </div>
+                <div className="p-3 rounded-xl bg-jp-card-light border border-jp-border">
+                  <p className="text-jp-gray text-xs mb-1">Treinos com carga</p>
+                  <p className="text-white text-lg font-semibold">{loadSessionsWithWeights}</p>
+                </div>
               </div>
               <div className="p-3 rounded-xl bg-jp-card-light border border-jp-border">
                 <p className="text-jp-gray text-xs mb-1">Tendência de evolução</p>
@@ -670,14 +805,24 @@ export default function Dashboard() {
           )}
 
           {exerciseRecords.length > 0 && (
-            <div className="mt-5 pt-4 border-t border-jp-border space-y-2">
-              <p className="text-xs text-jp-gray uppercase tracking-wider font-semibold">Melhores cargas por exercício</p>
-              {exerciseRecords.map(record => (
-                <div key={record.exerciseName} className="flex items-center justify-between text-sm">
-                  <p className="text-white truncate pr-3">{record.exerciseName}</p>
-                  <p className="text-jp-orange font-semibold whitespace-nowrap">{record.maxWeight.toFixed(1)} kg</p>
-                </div>
-              ))}
+            <div className="mt-5 pt-4 border-t border-jp-border">
+              <p className="text-xs text-jp-gray uppercase tracking-wider font-semibold mb-3">Evolução por exercício</p>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={exerciseRecords.slice(0, 5)} layout="vertical" margin={{ left: 10, right: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1A1A1A" />
+                  <XAxis type="number" tick={{ fill: '#A0A0A0', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis dataKey="exerciseName" type="category" width={130} tick={{ fill: '#E5E5E5', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#0A0A0A', border: '1px solid #1A1A1A', borderRadius: '12px', color: '#fff' }}
+                    formatter={(value, name) => [name === 'maxWeight' ? `${Number(value).toFixed(1)} kg` : `${Number(value).toLocaleString('pt-BR')} kg-reps`, name === 'maxWeight' ? 'Carga máxima' : 'Volume total']}
+                  />
+                  <Bar dataKey="maxWeight" name="Carga máxima" radius={[0, 8, 8, 0]}>
+                    {exerciseRecords.slice(0, 5).map((entry, index) => (
+                      <Cell key={entry.exerciseName} fill={index % 2 === 0 ? '#FF6200' : '#FF8533'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           )}
         </div>

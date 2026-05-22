@@ -183,6 +183,11 @@ export async function deleteWorkout(id) {
   if (error) throw error
 }
 
+export async function deleteWorkoutLog(id) {
+  const { error } = await supabase.from('workout_logs').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function updateExerciseWeights(workoutId, weightsByExerciseName) {
   if (!workoutId || !weightsByExerciseName || Object.keys(weightsByExerciseName).length === 0) return
   const updates = Object.entries(weightsByExerciseName).map(([name, weight]) =>

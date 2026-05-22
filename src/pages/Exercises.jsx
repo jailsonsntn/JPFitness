@@ -49,6 +49,84 @@ function looksLikeEnglish(text = '') {
   return /\b(the|with|and|grab|lean|body|exercise|none|arms|legs|core|shoulders|glutes|abs|biceps|triceps|step|jump|hold|while|your|this|is|for|to|of|in|on)\b/i.test(text)
 }
 
+function splitTextForTranslation(text, maxLength = 420) {
+  const input = (text || '').trim()
+  if (!input) return []
+  if (input.length <= maxLength) return [input]
+
+  const parts = input.match(/[^.!?]+[.!?]*/g) || [input]
+  const chunks = []
+  let current = ''
+
+  const pushCurrent = () => {
+    if (current.trim()) chunks.push(current.trim())
+    current = ''
+  }
+
+  const pushChunk = (segment) => {
+    if (!segment) return
+    if (segment.length <= maxLength) {
+      if (!current) {
+        current = segment
+        return
+      }
+      if ((current.length + 1 + segment.length) <= maxLength) {
+        current = `${current} ${segment}`
+        return
+      }
+      pushCurrent()
+      current = segment
+      return
+    }
+
+    const words = segment.split(/\s+/).filter(Boolean)
+    for (const word of words) {
+      if ((current.length + 1 + word.length) <= maxLength) {
+        current = current ? `${current} ${word}` : word
+      } else {
+        pushCurrent()
+        if (word.length <= maxLength) {
+          current = word
+        } else {
+          for (let index = 0; index < word.length; index += maxLength) {
+            const slice = word.slice(index, index + maxLength)
+            if (slice.length === maxLength) {
+              chunks.push(slice)
+            } else {
+              current = slice
+            }
+          }
+        }
+      }
+    }
+  }
+
+  parts.forEach(pushChunk)
+  pushCurrent()
+  return chunks
+}
+
+async function translateLongTextToPtBr(text, force = false) {
+  const input = (text || '').trim()
+  if (!input) return ''
+
+  if (translationCache.has(input)) return translationCache.get(input)
+
+  const chunks = splitTextForTranslation(input)
+  if (chunks.length <= 1) {
+    return translateToPtBr(input, force)
+  }
+
+  const translatedChunks = []
+  for (const chunk of chunks) {
+    translatedChunks.push(await translateToPtBr(chunk, force || looksLikeEnglish(chunk)))
+  }
+
+  const translated = translatedChunks.join(' ').replace(/\s+/g, ' ').trim() || input
+  translationCache.set(input, translated)
+  return translated
+}
+
 async function translateToPtBr(text, force = false) {
   const input = (text || '').trim()
   if (!input) return ''
@@ -65,6 +143,10 @@ async function translateToPtBr(text, force = false) {
     if (!response.ok) throw new Error('Translation request failed')
     const data = await response.json()
     const translated = data?.responseData?.translatedText?.trim() || input
+    if (/QUERY LENGTH LIMIT EXCEEDED/i.test(translated)) {
+      translationCache.set(input, input)
+      return input
+    }
     translationCache.set(input, translated)
     return translated
   } catch {
@@ -104,7 +186,6 @@ function ExerciseModal({ exercise, onClose }) {
   const baseMusclesSecondary = exercise.muscles_secondary?.map(m => m.name || m.name_en).filter(Boolean) || []
   const baseEquipment = exercise.equipment?.map(e => e.name).filter(Boolean) || []
   const [translated, setTranslated] = useState({
-    name: baseName,
     description: baseDescription,
     muscles: baseMuscles.map(translateTerm),
     musclesSecondary: baseMusclesSecondary.map(translateTerm),
@@ -127,16 +208,15 @@ function ExerciseModal({ exercise, onClose }) {
 
     const run = async () => {
       const force = translation?.language !== PT_LANGUAGE_ID
-      const [name, description, muscles, musclesSecondary, equipment] = await Promise.all([
-        translateToPtBr(baseName, force),
-        translateToPtBr(baseDescription, force),
+      const [description, muscles, musclesSecondary, equipment] = await Promise.all([
+        translateLongTextToPtBr(baseDescription, force),
         translateListToPtBr(baseMuscles, force),
         translateListToPtBr(baseMusclesSecondary, force),
         translateListToPtBr(baseEquipment, force),
       ])
 
       if (cancelled) return
-      setTranslated({ name, description, muscles, musclesSecondary, equipment })
+      setTranslated({ description, muscles, musclesSecondary, equipment })
     }
 
     run()
@@ -145,12 +225,13 @@ function ExerciseModal({ exercise, onClose }) {
 
   if (!exercise) return null
 
-  const name = translated.name
+  const name = baseName
   const description = translated.description
   const muscles = translated.muscles
   const musclesSecondary = translated.musclesSecondary
   const equipment = translated.equipment
   const category = getCategoryName(exercise.category?.id, exercise.category?.name)
+  const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(name + ' como fazer exercício')}`
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -165,6 +246,15 @@ function ExerciseModal({ exercise, onClose }) {
               {category}
             </span>
             <h2 className="text-2xl font-bold text-white">{name}</h2>
+            <a
+              href={youtubeSearchUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors mt-2"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8zM9.5 15.6V8.4l6.3 3.6-6.3 3.6z"/></svg>
+              Ver vídeo
+            </a>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl hover:bg-jp-border text-jp-gray hover:text-white transition-colors">
             <X size={20} />
@@ -243,7 +333,7 @@ function ExerciseModal({ exercise, onClose }) {
 
 function ExerciseCard({ exercise, onClick, translatedName }) {
   const translation = getPtTranslation(exercise)
-  const name = translatedName || translation?.name || 'Exercício sem nome'
+  const name = translation?.name || 'Exercício sem nome'
   const muscles = exercise.muscles?.map(m => translateTerm(m.name || m.name_en)).filter(Boolean).slice(0, 2) || []
   const equipment = translateTerm(exercise.equipment?.map(e => e.name)[0]) || 'Nenhum'
   const categoryId = exercise.category?.id
@@ -296,7 +386,6 @@ export default function Exercises() {
   const [total, setTotal] = useState(0)
   const [selectedExercise, setSelectedExercise] = useState(null)
   const [searchResults, setSearchResults] = useState(null)
-  const [translatedNames, setTranslatedNames] = useState({})
 
   const LIMIT = 20
 
@@ -353,30 +442,6 @@ export default function Exercises() {
       return searchResults.some(s => s.value?.toLowerCase().includes(name.toLowerCase()) || name.toLowerCase().includes(s.value?.toLowerCase()))
     })
     : exercises
-
-  useEffect(() => {
-    let cancelled = false
-    const pending = displayExercises.filter(ex => !translatedNames[ex.id]).slice(0, 8)
-    if (!pending.length) return
-
-    const translateNames = async () => {
-      const entries = await Promise.all(
-        pending.map(async (ex) => {
-          const tr = getPtTranslation(ex)
-          const force = tr?.language !== PT_LANGUAGE_ID
-          const rawName = tr?.name || 'Exercício'
-          const translatedName = await translateToPtBr(rawName, force)
-          return [ex.id, translatedName]
-        })
-      )
-
-      if (cancelled) return
-      setTranslatedNames(prev => ({ ...prev, ...Object.fromEntries(entries) }))
-    }
-
-    translateNames()
-    return () => { cancelled = true }
-  }, [displayExercises, translatedNames])
 
   return (
     <div className="page-container">
@@ -465,7 +530,6 @@ export default function Exercises() {
             <ExerciseCard
               key={exercise.id}
               exercise={exercise}
-              translatedName={translatedNames[exercise.id]}
               onClick={setSelectedExercise}
             />
           ))}
